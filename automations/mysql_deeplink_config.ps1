@@ -1,10 +1,10 @@
+cd ..
 $currDir=(Get-Location).Path -replace "\\", "/"
 $userDir = $env:USERPROFILE -replace "\\", "/"
 echo $currDir
 mkdir ./mysql -Force
 mkdir ./mysql/logs -Force
 mkdir ./mysql/data -Force
-
 $data = @{
     "mysqld" = @{
         # "log-bin                        "   = "mysql-bin"
