@@ -20,3 +20,5 @@ cache/
 app/
 mysql/
 database/
+data/
+*.parquet
