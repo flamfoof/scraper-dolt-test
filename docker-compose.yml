@@ -1,0 +1,18 @@
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: my_mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: asdf
+      MARIADB_DATABASE: tmdb
+      MARIADB_USER: felix
+      MARIADB_PASSWORD: asdf  
+    restart: always
+    build: 
+      context: .
+    ports:
+      - "3306:3306"
+    volumes:
+      - deeplinkdata:/var/lib/mysql
+volumes:
+  deeplinkdata:

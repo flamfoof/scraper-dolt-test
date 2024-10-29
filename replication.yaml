@@ -1,0 +1,19 @@
+source: MARIADB
+target: LOCAL
+
+defaults:
+  target_options:
+    format: parquet
+
+streams:
+  # tmdb.test4:
+  #   object: file://C:/Users/flam/Documents/work/scraper-dolt-test/my_file.parquet # Windows Path format
+
+  # all tables in schema, except "forbidden_table"
+  tmdb.*:
+    # mode: full-refresh
+    mode: incremental
+    primary_key: id
+    object: ./tmdb_parquets
+    target_options:
+      file_max_rows: 10 # will split files into folder

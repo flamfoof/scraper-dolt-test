@@ -17,3 +17,6 @@ cache/
 !info/amazon/derivative/types.json
 !info/apple/apple_tv_movies.json
 !info/apple/apple_tv_series.json
+app/
+mysql/
+database/
