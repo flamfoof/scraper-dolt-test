@@ -22,3 +22,4 @@ mysql/
 database/
 data/
 *.parquet
+.sqlhistory

@@ -1,1 +1,0 @@
-powershell mysql_deeplink_config.ps1
