@@ -13,11 +13,18 @@ $service = Get-Service -Name "mariadb" -ErrorAction SilentlyContinue
 if ($service) {
     Stop-Service -Name "mariadb" -Force
     # Delete the existing service
-    sc delete mariadb
+    sc.exe stop mariadb
+    Start-Sleep -Seconds 1.0
+
+    sc.exe delete mariadb
+    Start-Sleep -Seconds 1.0
 }
 
 # Install MariaDB service
 mysql_install_db --service MariaDB -c mariadb_local.ini -p admin
+Start-Sleep -Seconds 1.0
+
 sc.exe start MariaDB
-pause
+Start-Sleep -Seconds 2.0
+
 Exit

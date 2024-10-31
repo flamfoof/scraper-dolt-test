@@ -9,6 +9,8 @@ SET-LOCATION ..
 sc.exe stop mariadb
 sc.exe delete mariadb
 
+Start-Sleep -Seconds 1.5
+
 rm -r ./mysql
 $currDir=(Get-Location).Path -replace "\\", "/"
 $userDir = $env:USERPROFILE -replace "\\", "/"
@@ -55,6 +57,6 @@ $config | Out-File "mariadb_local.ini" -Encoding ASCII
 # mysql_install_db -c mariadb_local.ini -p admin 
 # mysqld --defaults-file="mariadb_local.ini" --console
 
-pause
+Start-Sleep -Seconds 1.0
 
 exit
