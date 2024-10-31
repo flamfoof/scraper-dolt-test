@@ -7,7 +7,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "cd automations && mysql_deeplink_config.bat",
-    "bunStart": "bun main.js"
+    "bunStart": "bun main.js",
+    "mysqlInit": "cd automations && cmd.exe /c mysql_deeplink_init.bat",
+    "mysqlStart": "cd automations && cmd.exe /c mysql_deeplink_start.bat",
+    "mysqlAuto": "cd automations && cmd.exe /c mysql_deeplink_auto.bat"
  },
   "dependencies": {
   }

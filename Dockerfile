@@ -2,7 +2,7 @@
 FROM mariadb:latest
 
 WORKDIR /var/lib/mysql
-
+ARG MARIADB_ROOT_PASSWORD
 # # Update the package lists
 # RUN apt-get update -y
 
@@ -17,8 +17,10 @@ EXPOSE 3306
 
 # Initialize the database and create a test database
 # COPY init-mariadb.sql /app/init-mariadb.sql
+COPY ./mariadb.ini /etc/mysql/my.ini
 COPY ./mariadb.ini /etc/mysql/my.cnf
-# CMD [ "/bin/bash", "mkdir", "data", "&&", "mariadbd"]
 
+# CMD [ "/bin/bash", "mkdir", "data", "&&", "mariadbd"]
+RUN echo $MARIADB_ROOT_PASSWORD
 # Command to run when the container starts
-CMD ["mariadbd"]
+# CMD ["mariadbd", "--defaults-file=/etc/mysql/my.ini"]
