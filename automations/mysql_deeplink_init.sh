@@ -1,42 +1,62 @@
-#!/bin/bash
-if [ "$EUID" -ne 0 ]; then 
-    echo "This script must be run as root"
-    # Attempt to re-run with sudo
-    exec sudo "$0" "$@"
-    exit
-fi
+if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    # Relaunch as administrator
+    Start-Process powershell.exe -Verb RunAs "-NoProfile -ExecutionPolicy Bypass  -Command cd '$PWD' ;`"$PSCommandPath`""
+    Exit
+}
 
-# Stop the existing MariaDB service (if running)
-sudo systemctl stop mariadb
+SET-LOCATION ..
 
-# Remove the old MySQL data directory
-rm -rf mysql
+sc.exe stop mariadb
+sc.exe delete mariadb
 
-# Create the new MySQL data directory
-mkdir -p mysql/data mysql/logs
+Start-Sleep -Seconds 1.5
 
-# Create the my.cnf configuration file
-cat > my.cnf << EOF
-[mysqld]
-log-bin = mysql-bin
-server-id = 2
-port = 3307
-datadir = "./mysql/data"
-socket = "./mysql/mysql.sock"
-log-error = "./mysql/logs/error.log"
-slow_query_log_file = "./mysql/logs/slow_query.log"
-slow_query_log = 1
-innodb_buffer_pool_size = 256M
-innodb_log_file_size = 50M
-max_connections = 100
-innodb_flush_log_at_trx_commit = 2
+rm -r ./mysql
+$currDir=(Get-Location).Path -replace "\\", "/"
+$userDir = $env:USERPROFILE -replace "\\", "/"
+echo $currDir
+mkdir ./mysql -Force
+mkdir ./mysql/logs -Force
+mkdir ./mysql/data -Force
+$data = @{
+    "mysqld" = @{
+        "log-bin                        "   = "mysql-bin"
+        "server-id                      "   = 2
+        "port                           "   = 3307
+        "datadir                        "   = "$currDir/mysql/data"
+        "socket                         "   = "$currDir/mysql/mysql.sock"
+        "log-error                      "   = "$currDir/mysql/logs/error.log"
+        "slow_query_log_file            "   = "$currDir/mysql/logs/slow_query.log"
+        "slow_query_log                 "   = 1
+        "innodb_buffer_pool_size        "   = "256M"
+        "innodb_log_file_size           "   = "50M"
+        "max_connections                "   = 100
+        "innodb_flush_log_at_trx_commit "   = 2
+    }
+    "client" = @{
+        "plugin-dir                     "   = "$userDir/scoop/apps/mariadb/current/lib/plugin"
+    }
+}
 
-[client]
-plugin-dir = "$HOME/scoop/apps/mariadb/current/lib/plugin"
-EOF
+$config = @()
+$config += "# These are the configurations for local->remote connection"
+foreach ($section in $Data.Keys) {
+    $config += "[$($section)]"
+    foreach ($key in $Data[$section].Keys) {
+        $config += "$key=$($Data[$section][$key])"
+    }
+    $config += ""
+}
+$config += "skip-name-resolve"
+echo ""
+echo "Creating the local config file: mariadb_local.ini"
 
-# Initialize the MySQL data directory
-mysql_install_db -c mariadb_local.ini -p admin 
+$config | Out-File "mariadb_local.ini" -Encoding ASCII
 
-# Start the MariaDB server
-mysqld --defaults-file="mariadb_local.ini" --console
+#start the mariadb service
+# mysql_install_db -c mariadb_local.ini -p admin 
+# mysqld --defaults-file="mariadb_local.ini" --console
+
+Start-Sleep -Seconds 1.0
+
+exit
