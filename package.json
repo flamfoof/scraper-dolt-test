@@ -10,7 +10,10 @@
     "bunStart": "bun main.js",
     "mysqlInit": "cd automations && cmd.exe /c mysql_deeplink_init.bat",
     "mysqlStart": "cd automations && cmd.exe /c mysql_deeplink_start.bat",
-    "mysqlAuto": "cd automations && cmd.exe /c mysql_deeplink_auto.bat"
+    "mysqlAuto": "cd automations && cmd.exe /c mysql_deeplink_auto.bat",
+    "mysqlClone": "cd automations && cmd.exe /c mysql_deeplink_clone.bat",
+    "mysqlCloneDiff": "cd automations && cmd.exe /c mysql_deeplink_clone_diff.bat"
+
  },
   "dependencies": {
   }
