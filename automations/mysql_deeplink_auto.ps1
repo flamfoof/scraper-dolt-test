@@ -25,6 +25,6 @@ mysql_install_db --service MariaDB -c mariadb_local.ini -p admin
 Start-Sleep -Seconds 1.0
 
 sc.exe start MariaDB
-Start-Sleep -Seconds 2.0
+Start-Sleep -Seconds 1.0
 
 Exit
