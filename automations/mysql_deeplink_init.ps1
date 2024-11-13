@@ -5,19 +5,42 @@ if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 SET-LOCATION ..
+$envFile = "./proj.env"
+$envConfig = @{}
+
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*([^=]+)=(.*)$') {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim() -replace '^["'']|["'']$'
+            $envConfig[$key] = $value
+        }
+    }
+} else {
+    Write-Host "Environment file not found: $envFile" -ForegroundColor Red
+    exit 1
+}
 
 sc.exe stop mariadb
 sc.exe delete mariadb
 
+
+# Start the service
+$SSH_File = $envConfig['SSH_FILE']
+$SSH_Path = "$env:USERPROFILE\.ssh\$SSH_File"
+$process = Start-Process "ssh-add" "$SSH_Path" -NoNewWindow -PassThru -Wait 
+
 Start-Sleep -Seconds 1.5
 
 rm -r ./mysql
+
 $currDir=(Get-Location).Path -replace "\\", "/"
 $userDir = $env:USERPROFILE -replace "\\", "/"
-echo $currDir
+
 mkdir ./mysql -Force
 mkdir ./mysql/logs -Force
 mkdir ./mysql/data -Force
+
 $data = @{
     "mysqld" = @{
         "log-bin                        "   = "mysql-bin"
@@ -32,6 +55,7 @@ $data = @{
         "innodb_log_file_size           "   = "50M"
         "max_connections                "   = 100
         "innodb_flush_log_at_trx_commit "   = 2
+        "lower_case_table_names         "   = 2
     }
     "client" = @{
         "plugin-dir                     "   = "$userDir/scoop/apps/mariadb/current/lib/plugin"
@@ -48,8 +72,10 @@ foreach ($section in $Data.Keys) {
     $config += ""
 }
 $config += "skip-name-resolve"
-echo ""
+
 echo "Creating the local config file: mariadb_local.ini"
+
+Start-Sleep -Seconds 1.0
 
 $config | Out-File "mariadb_local.ini" -Encoding ASCII
 
