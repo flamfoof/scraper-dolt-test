@@ -8,6 +8,11 @@ services:
       MARIADB_DATABASE: tmdb
       MARIADB_USER: test
       MARIADB_PASSWORD: asdf  
+      MASTER_HOST: host_location
+      MASTER_USER: test
+      MASTER_PASSWORD: asdf
+      MASTER_LOG_FILE: 'mysql-bin.000001'
+      MASTER_LOG_POS: 4
     restart: always
     build: 
       context: .
