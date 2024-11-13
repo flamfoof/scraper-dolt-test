@@ -3,9 +3,10 @@ services:
     image: mariadb:latest
     container_name: my_mariadb
     environment:
+    #Replace the password and users with something real
       MARIADB_ROOT_PASSWORD: asdf
       MARIADB_DATABASE: tmdb
-      MARIADB_USER: felix
+      MARIADB_USER: test
       MARIADB_PASSWORD: asdf  
     restart: always
     build: 

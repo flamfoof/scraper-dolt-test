@@ -1,20 +1,19 @@
 {
-  "name": "Deeplink MySQL DB",
-  "version": "1.1.0",
-  "description": "",
-  "main": "main.js",
-  "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "cd automations && mysql_deeplink_config.bat",
-    "bunStart": "bun main.js",
-    "mysqlInit": "cd automations && cmd.exe /c mysql_deeplink_init.bat",
-    "mysqlStart": "cd automations && cmd.exe /c mysql_deeplink_start.bat",
-    "mysqlAuto": "cd automations && cmd.exe /c mysql_deeplink_auto.bat",
-    "mysqlClone": "cd automations && cmd.exe /c mysql_deeplink_clone.bat",
-    "mysqlCloneDiff": "cd automations && cmd.exe /c mysql_deeplink_clone_diff.bat"
-
- },
-  "dependencies": {
-  }
+	"name": "Deeplink MySQL DB",
+	"version": "1.1.0",
+	"description": "",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"start": "cd automations && mysql_deeplink_config.bat",
+		"bunStart": "bun main.js",
+		"mysqlInit": "cd automations && cmd.exe /c mysql_deeplink_init.bat",
+		"mysqlStart": "cd automations && cmd.exe /c mysql_deeplink_start.bat",
+		"mysqlAuto": "cd automations && cmd.exe /c mysql_deeplink_auto.bat",
+		"mysqlClone": "cd automations && cmd.exe /c mysql_deeplink_clone.bat",
+		"mysqlCloneDiff": "cd automations && cmd.exe /c mysql_deeplink_clone_diff.bat",
+		"mysqlFlush": "cd automations && cmd.exe /c mysql_deeplink_flush.bat"
+	},
+	"dependencies": {}
 }
