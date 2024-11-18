@@ -70,7 +70,7 @@ Write-Host "Destination Host: $DestinationHost"
 Write-Host "Destination User: $DestinationUser"
 Write-Host "Databases to clone: $($DatabaseNames -join ', ')"
 
-$mariaConnection = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -p""$DestinationPassword"" -N -e "
+$mariaLocalConnection = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p""$DestinationPassword"" -N -e "
 # Connect to SSH server tunnel
 $SSH_File = $envConfig['SSH_FILE']
 $SSH_Path = "$env:USERPROFILE\.ssh\$SSH_File".Replace("\", "/")
@@ -105,90 +105,92 @@ function SendSSHCommand() {
 
 Start-Sleep -Seconds 1.0
 $initMaster = """CHANGE MASTER TO
-    MASTER_HOST='$SSH_Host',
-    MASTER_USER='$MasterReplUser',
-    MASTER_PASSWORD='$MasterReplPass',
-    MASTER_LOG_FILE='mysql-bin.000001',
-    MASTER_LOG_POS=4;"""
+    MASTER_HOST     ='$SourceHost',
+    MASTER_USER     ='$MasterReplUser',
+    MASTER_PASSWORD ='$MasterReplPass',
+    MASTER_LOG_FILE ='mysql-bin.000001',
+    MASTER_LOG_POS  =1;,
+    MASTER_SSL      =1;"""
 
-$startSlave = "START SLAVE;"
+$startSlave = """STOP SLAVE;
+    START SLAVE;"""
 
 
 #Only run this locally, do not run using SendSSHComamnd
-$startMasterConfig = $mariaConnection + $initMaster
+$startMasterConfig = $mariaLocalConnection + $initMaster
 Write-Host $startMasterConfig -ForegroundColor Green
 Invoke-Expression $startMasterConfig
 
-$startMasterConnection = $mariaConnection + $startSlave
+$startMasterConnection = $mariaLocalConnection + $startSlave
 Write-Host $startMasterConnection -ForegroundColor Green
 Invoke-Expression $startMasterConnection
 exit
 
 
 # Clone each database
-# foreach ($Database in $DatabaseNames) {
-#     Write-Host "Cloning database: $Database" -ForegroundColor Cyan
-#     # Create database SQL command
-#     $createDbSQL = 
-#         "CREATE DATABASE IF NOT EXISTS tmdb
-#         CHARACTER SET utf8mb4
-#         COLLATE utf8mb4_unicode_ci;"
+foreach ($Database in $DatabaseNames) {
+    Write-Host "Cloning database: $Database" -ForegroundColor Cyan
+    # Create database SQL command
+    $createDbSQL = 
+        "CREATE DATABASE IF NOT EXISTS tmdb
+        CHARACTER SET utf8mb4
+        COLLATE utf8mb4_unicode_ci;"
 
-#     try {
-#         Write-Host "Attempting to create database '$Database' on $DestinationHost..." -ForegroundColor Cyan
-#         $sqlTableGen = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p""$DestinationPassword"" -e ""$createDbSQL""" 
-#         Write-Host $sqlTableGen -ForegroundColor Yellow
-#         # Execute the create database command
-#         # $result = $mariaExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p"$DestinationPassword" -e $createDbSQL
-#         $result = SendSSHCommand -Session $sessionShell -Command $sqlTableGen
+    try {
+        Write-Host "Attempting to create database '$Database' on $DestinationHost..." -ForegroundColor Cyan
+        $sqlTableGen = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p""$DestinationPassword"" -e ""$createDbSQL""" 
+        Write-Host $sqlTableGen -ForegroundColor Yellow
+        # Execute the create database command
+        # $result = $mariaExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p"$DestinationPassword" -e $createDbSQL
+        $result = SendSSHCommand -Session $sessionShell -Command $sqlTableGen
 
 
-#         exit
-#         if ($LASTEXITCODE -eq 0) {
-#             Write-Host "Database creation successful or database already exists." -ForegroundColor Green
+        exit
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Database creation successful or database already exists." -ForegroundColor Green
             
-#             # Verify database exists
-#             $checkDbSQL = "SELECT SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME 
-#                         FROM information_schema.SCHEMATA 
-#                         WHERE SCHEMA_NAME = '$Database';"
+            # Verify database exists
+            $checkDbSQL = "SELECT SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME 
+                        FROM information_schema.SCHEMATA 
+                        WHERE SCHEMA_NAME = '$Database';"
             
-#             $dbInfo = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -p""$DestinationPassword"" -N -e $checkDbSQL"
-#             Write-Host $dbInfo -ForegroundColor Yellow
-#             Invoke-Expression $dbInfo
+            $dbInfo = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -p""$DestinationPassword"" -N -e $checkDbSQL"
+            Write-Host $dbInfo -ForegroundColor Yellow
+            Invoke-Expression $dbInfo
 
-#             if ($dbInfo) {
-#                 Write-Host "`nDatabase Information:" -ForegroundColor Cyan
-#                 Write-Host $dbInfo
-#             }
-#         } else {
-#             Write-Host "Error creating database: $result" -ForegroundColor Red
-#             exit 1
-#         }
-#     } catch {
-#         Write-Host "Error occurred: $_" -ForegroundColor Red
-#         exit 1
-#     }
-#     exit
-#     # Clone the database
-#     try {
-#         echo "$mariaDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | $mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
+            if ($dbInfo) {
+                Write-Host "`nDatabase Information:" -ForegroundColor Cyan
+                Write-Host $dbInfo
+            }
+        } else {
+            Write-Host "Error creating database: $result" -ForegroundColor Red
+            exit 1
+        }
+    } catch {
+        Write-Host "Error occurred: $_" -ForegroundColor Red
+        exit 1
+    }
+    exit
+    # Clone the database
+    try {
+        echo "$mariaDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | $mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
 
-#         # Dump and restore in one pipeline
-#         $command = "$mariaDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | $mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
+        # Dump and restore in one pipeline
+        $command = "$mariaDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | $mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
         
-#         Invoke-Expression $command
+        Invoke-Expression $command
         
-#         if ($LASTEXITCODE -eq 0) {
-#             Write-Host "Successfully cloned $Database" -ForegroundColor Green
-#         } else {
-#             Write-Host "Error cloning $Database" -ForegroundColor Red
-#         }
-#     }
-#     catch {
-#         Write-Host "Failed to clone $Database" -ForegroundColor Red
-#         Write-Host $_.Exception.Message -ForegroundColor Red
-#     }
-# }
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Successfully cloned $Database" -ForegroundColor Green
+        } else {
+            Write-Host "Error cloning $Database" -ForegroundColor Red
+        }
+    }
+    catch {
+        Write-Host "Failed to clone $Database" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+    }
+}
 
 if ($session) {
     Remove-SSHSession -SessionId $session.SessionId | Out-Null

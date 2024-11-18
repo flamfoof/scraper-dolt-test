@@ -1,19 +1,33 @@
 {
-	"name": "Deeplink MySQL DB",
-	"version": "1.1.0",
-	"description": "",
-	"main": "main.js",
-	"type": "module",
-	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
-		"start": "cd automations && mysql_deeplink_config.bat",
-		"bunStart": "bun main.js",
-		"mysqlInit": "cd automations && cmd.exe /c mysql_deeplink_init.bat",
-		"mysqlStart": "cd automations && cmd.exe /c mysql_deeplink_start.bat",
-		"mysqlAuto": "cd automations && cmd.exe /c mysql_deeplink_auto.bat",
-		"mysqlClone": "cd automations && cmd.exe /c mysql_deeplink_clone.bat",
-		"mysqlCloneDiff": "cd automations && cmd.exe /c mysql_deeplink_clone_diff.bat",
-		"mysqlFlush": "cd automations && cmd.exe /c mysql_deeplink_flush.bat"
-	},
-	"dependencies": {}
+  "name": "deeplink-mysql-db",
+  "version": "1.2.0",
+  "description": "Efficient MariaDB cloning and management tool",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "init": "bun run src/commands/init.js",
+    "start": "bun run src/commands/start.js",
+    "service": "bun run src/commands/service.js",
+    "service:uninstall": "bun run src/commands/service.js --uninstall",
+    "clone": "bun run src/commands/clone.js",
+    "diff": "bun run src/commands/clone-diff.js",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^11.0.0",
+    "dotenv": "^16.3.1",
+    "mysql2": "^3.6.0",
+    "ora": "^7.0.1",
+    "p-queue": "^7.4.1",
+    "zod": "^3.22.2"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "author": "",
+  "license": "MIT"
 }

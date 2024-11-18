@@ -1,34 +1,134 @@
-# scraper-dolt-test
+# Deeplink MySQL DB
 
-This project is used to test the DoltHub scraper. It spins up a local instance of MariaDB, and then clones a database from a remote server into the local instance.
+A powerful and efficient MariaDB cloning and management tool optimized for handling database operations.
 
-## Usage
+## Features
 
-### Set up local MariaDB instance
+- **Efficient Database Cloning**: Clone databases with optimized connection pooling and batched operations
+- **Schema Comparison**: Compare database schemas between source and destination
+- **Local Database Management**: Initialize and manage local MariaDB instances
+- **Windows Service Integration**: Run MariaDB as a Windows service with auto-start capability
+- **Progress Tracking**: Visual feedback for long-running operations
+- **Dry Run Mode**: Preview changes before execution
 
-1. Run `npm run mysqlInit` to install and configure the MariaDB service.
-2. Run `npm run mysqlStart` to start the MariaDB service.
-3. Run `npm run mysqlAuto` to install the service and have it start automatically.
+## Prerequisites
 
-### Clone database
+- [Bun](https://bun.sh/) (>= 1.0.0)
+- MariaDB (>= 10.5)
+- Node.js (>= 18.0.0)
+- Windows OS (for service functionality)
 
-1. Run `npm run mysqlClone` to clone the database from the remote server into the local instance.
+## Installation
 
-### Uninstall
-
-1. Run `sc.exe stop MariaDB` to stop the MariaDB service.
-2. Run `sc.exe delete MariaDB` to uninstall the MariaDB service.
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+3. Copy `sample.env` to `proj.env` and configure your environment variables
 
 ## Configuration
 
-The scraper is configured using environment variables. You can set the following variables:
+Required environment variables in `proj.env`:
 
-* `MASTER_DB_HOST`: The host of the remote database server.
-* `MASTER_DB_USER`: The username to use when connecting to the remote database server.
-* `MASTER_DB_PASS`: The password to use when connecting to the remote database server.
-* `MASTER_DB_PORT`: The port to use when connecting to the remote database server.
-* `LOCAL_DB_HOST`: The host of the local database server (default is `localhost`).
-* `LOCAL_DB_USER`: The username to use when connecting to the local database server (default is `root`).
-* `LOCAL_DB_PASS`: The password to use when connecting to the local database server (default is `dolt`).
-* `LOCAL_DB_PORT`: The port to use when connecting to the local database server (default is `3306`).
-* `CLONE_DATABASES`: A comma-separated list of databases to clone from the remote server.
+```env
+MASTER_DB_HOST=your_source_host
+MASTER_DB_USER=your_source_user
+MASTER_DB_PASS=your_source_password
+MASTER_DB_PORT=3306
+
+LOCAL_DB_HOST=localhost
+LOCAL_DB_USER=your_local_user
+LOCAL_DB_PASS=your_local_password
+LOCAL_DB_PORT=3307
+
+CLONE_DATABASES=db1,db2,db3
+SSH_FILE=your_ssh_key_file
+```
+
+## Usage
+
+### Initialize Local Database
+
+Set up a new local MariaDB instance:
+
+```bash
+bun run init
+```
+
+### Run as Windows Service
+
+Install and start MariaDB as a Windows service (requires Administrator privileges):
+
+```bash
+# Install and start as service
+bun run service
+
+# Uninstall service
+bun run service:uninstall
+
+# Service can also be managed using Windows commands:
+net start MariaDB
+net stop MariaDB
+sc.exe query MariaDB
+```
+
+### Start Database Server (Non-service mode)
+
+Start the local MariaDB server directly:
+
+```bash
+bun run start
+```
+
+### Clone Databases
+
+Clone databases from source to destination:
+
+```bash
+# Clone specific database
+bun run clone -d database_name
+
+# Clone with custom batch size
+bun run clone -d database_name -b 5000
+
+# Dry run to preview changes
+bun run clone --dry-run
+```
+
+### Compare Schemas
+
+Compare database schemas between source and destination:
+
+```bash
+bun run diff -d database_name
+```
+
+## Commands
+
+- `init`: Initialize a new MariaDB instance
+- `service`: Install and run MariaDB as a Windows service
+- `start`: Start the MariaDB server (non-service mode)
+- `clone`: Clone databases from source to destination
+- `diff`: Compare database schemas
+- `setup`: Create necessary databases and users
+
+## Architecture
+
+The project uses a modular architecture with the following components:
+
+- `src/lib/db-manager.js`: Core database operations
+- `src/commands/`: CLI commands
+  - `init.js`: Database initialization
+  - `service.js`: Windows service management
+  - `start.js`: Direct server startup
+  - `clone.js`: Database cloning
+  - `clone-diff.js`: Schema comparison
+- `src/index.js`: Main entry point
+
+
+## Logging
+
+Logs are stored in:
+- `mysql/logs/error.log`: MariaDB error logs
+- `mysql/logs/mysql.log`: General query logs

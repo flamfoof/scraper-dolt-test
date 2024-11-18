@@ -1,6 +1,5 @@
-# Read and parse the environment file
-SET-LOCATION ..
-$envFile = "./proj.env"
+# Load environment variables from proj.env
+$envFile = ".\proj.env"
 $envConfig = @{}
 
 if (Test-Path $envFile) {
@@ -16,81 +15,136 @@ if (Test-Path $envFile) {
     exit 1
 }
 
-# Set variables from environment file
-$SourceHost = $envConfig['MASTER_DB_HOST']
-$SourceUser = $envConfig['MASTER_DB_USER']
-$SourcePassword = $envConfig['MASTER_DB_PASS']
-$SourcePort = $envConfig['MASTER_DB_PORT']
-$DestinationHost = If ($envConfig.ContainsKey('LOCAL_DB_HOST')) {$envConfig['LOCAL_DB_HOST']} Else {'localhost'}
-$DestinationUser = $envConfig['LOCAL_DB_USER']
-$DestinationPassword = $envConfig['LOCAL_DB_PASS']
-$DestinationPort = $envConfig['LOCAL_DB_PORT']
-$DatabaseNames = $envConfig['CLONE_DATABASES'] -split ','
+# Set connection parameters from env file
+$SOURCE_HOST = $envConfig['MASTER_DB_HOST']
+$SOURCE_USER = $envConfig['MASTER_DB_USER']
+$SOURCE_PASS = $envConfig['MASTER_DB_PASS']
+$SOURCE_PORT = $envConfig['MASTER_DB_PORT']
+$DEST_HOST = if ($envConfig['LOCAL_DB_HOST']) { $envConfig['LOCAL_DB_HOST'] } else { 'localhost' }
+$DEST_USER = $envConfig['LOCAL_DB_USER']
+$DEST_PASS = $envConfig['LOCAL_DB_PASS']
+$DEST_PORT = $envConfig['LOCAL_DB_PORT']
+$DATABASES = $envConfig['CLONE_DATABASES'] -split ','
 
-# Display configuration (without passwords)
-Write-Host "Configuration loaded:" -ForegroundColor Cyan
-Write-Host "Source Host: $SourceHost"
-Write-Host "Source User: $SourceUser"
-Write-Host "Destination Host: $DestinationHost"
-Write-Host "Destination User: $DestinationUser"
-Write-Host "Databases to clone: $($DatabaseNames -join ', ')"
-
-# Clone each database
-foreach ($Database in $DatabaseNames) {
-    Write-Host "`nCloning database: $Database" -ForegroundColor Cyan
-    # Create database SQL command
-    $createDbSQL = @"
-    CREATE DATABASE IF NOT EXISTS $Database
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
+# Rest of your functions here...
+function Get-TableChecksum {
+    param (
+        [string]$HostLocation,
+        [string]$User,
+        [string]$Pass,
+        [string]$Port,
+        [string]$Database,
+        [string]$Table
+    )
+    
+    $query = @"
+        CHECKSUM TABLE $Database.$Table EXTENDED;
 "@
+    
+    $result = mysql -h $HostLocation -u $User -P $Port -p"$Pass" -N -e $query
+    return $result
+}
 
-    try {
-        Write-Host "Attempting to create database '$Database' on $DestinationHost..." -ForegroundColor Cyan
-        echo "mysql -h $DestinationHost -u $DestinationUser -P $DestinationPort -p"$DestinationPassword" -e $createDbSQL 2>&1"
-        # Execute the create database command
-        $result = mysql -h $DestinationHost -u $DestinationUser -P $DestinationPort -p"$DestinationPassword" -e $createDbSQL 2>&1
+function Get-TableStructure {
+    param (
+        [string]$HostLocation,
+        [string]$User,
+        [string]$Pass,
+        [string]$Port,
+        [string]$Database,
+        [string]$Table
+    )
+    
+    $query = "SHOW CREATE TABLE $Database.$Table;"
+    $result = mysql -h $HostLocation -u $User -P $Port -p"$Pass" -N -e $query
+    return $result
+}
+
+function Compare-AndSync {
+    param (
+        [string]$Database,
+        [string]$Table
+    )
+
+    Write-Host "Comparing table $Database.$Table..." -ForegroundColor Cyan
+
+    # Compare table structures
+    $sourceStructure = Get-TableStructure -Host $SOURCE_HOST -User $SOURCE_USER -Port $SOURCE_PORT -Pass $SOURCE_PASS -Database $Database -Table $Table
+    $destStructure = Get-TableStructure -Host $DEST_HOST -User $DEST_USER -Port $DEST_PORT -Pass $DEST_PASS -Database $Database -Table $Table
+
+    if ($sourceStructure -ne $destStructure) {
+        Write-Host "Table structure differs for $Table. Recreating table..." -ForegroundColor Yellow
         
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Database creation successful or database already exists." -ForegroundColor Green
-            
-            # Verify database exists
-            $checkDbSQL = "SELECT SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME 
-                        FROM information_schema.SCHEMATA 
-                        WHERE SCHEMA_NAME = '$Database';"
-            
-            $dbInfo = mysql -h $DestinationHost -u $DestinationUser -p"$DestinationPassword" -N -e $checkDbSQL
-            
-            if ($dbInfo) {
-                Write-Host "`nDatabase Information:" -ForegroundColor Cyan
-                Write-Host $dbInfo
-            }
-        } else {
-            Write-Host "Error creating database: $result" -ForegroundColor Red
-            exit 1
-        }
-    } catch {
-        Write-Host "Error occurred: $_" -ForegroundColor Red
-        exit 1
+        # Drop and recreate table
+        $dropQuery = "DROP TABLE IF EXISTS $Database.$Table;"
+        mysql -h $DEST_HOST -u $DEST_USER -P $DEST_PORT -p"$DEST_PASS" $Database -e $dropQuery
+        
+        # Create table with source structure
+        mysql -h $DEST_HOST -u $DEST_USER -P $DEST_PORT -p"$DEST_PASS" $Database -e $sourceStructure
     }
 
-    # Clone the database
-    try {
-        echo "mysqldump -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | mysql -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
+    # Compare table checksums
+    $sourceChecksum = Get-TableChecksum -Host $SOURCE_HOST -User $SOURCE_USER -Port $SOURCE_PORT -Pass $SOURCE_PASS -Database $Database -Table $Table
+    $destChecksum = Get-TableChecksum -Host $DEST_HOST -User $DEST_USER -Port $DEST_PORT -Pass $DEST_PASS -Database $Database -Table $Table
 
-        # Dump and restore in one pipeline
-        $command = "mysqldump -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | mysql -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
+    if ($sourceChecksum -ne $destChecksum) {
+        Write-Host "Data differs for table $Table. Syncing..." -ForegroundColor Yellow
+
+        # Get primary key or unique key
+        $keyQuery = @"
+            SELECT k.COLUMN_NAME
+            FROM information_schema.table_constraints t
+            JOIN information_schema.key_column_usage k
+            USING(constraint_name,table_schema,table_name)
+            WHERE t.constraint_type='PRIMARY KEY'
+            AND t.table_schema='$Database'
+            AND t.table_name='$Table';
+"@
         
-        Invoke-Expression $command
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Successfully cloned $Database" -ForegroundColor Green
+        $keyColumn = mysql -h $SOURCE_HOST -u $SOURCE_USER -P $SOURCE_PORT -p"$SOURCE_PASS" -N -e $keyQuery
+
+        if ($keyColumn) {
+            # Sync using primary key
+            $syncQuery = @"
+                CREATE TEMPORARY TABLE tmp_sync_$Table LIKE $Table;
+                INSERT INTO tmp_sync_$Table SELECT * FROM $Table;
+                
+                REPLACE INTO $Table
+                SELECT source.*
+                FROM ($Table@master_server source
+                LEFT JOIN tmp_sync_$Table dest ON source.$keyColumn = dest.$keyColumn)
+                WHERE dest.$keyColumn IS NULL;
+                
+                DROP TEMPORARY TABLE tmp_sync_$Table;
+"@
+            mysql -h $DEST_HOST -u $DEST_USER -P $DEST_PORT -p"$DEST_PASS" $Database -e $syncQuery
         } else {
-            Write-Host "Error cloning $Database" -ForegroundColor Red
+            # If no primary key, do a full table sync
+            Write-Host "No primary key found. Performing full table sync..." -ForegroundColor Yellow
+            $dumpCmd = "mysqldump -h $SOURCE_HOST -u $SOURCE_USER -P $SOURCE_PORT -p`"$SOURCE_PASS`" --single-transaction --quick --no-create-info $Database $Table"
+            $importCmd = "mysql -h $DEST_HOST -u $DEST_USER -P $DEST_PORT -p`"$DEST_PASS`" $Database"
+            Invoke-Expression "$dumpCmd | $importCmd"
         }
-    }
-    catch {
-        Write-Host "Failed to clone $Database" -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
+    } else {
+        Write-Host "Table $Table is in sync." -ForegroundColor Green
     }
 }
+
+# Main sync process
+foreach ($Database in $DATABASES) {
+    Write-Host "`nProcessing database: $Database" -ForegroundColor Cyan
+
+    # Create database if it doesn't exist
+    $createDbQuery = "CREATE DATABASE IF NOT EXISTS $Database;"
+    mysql -h $DEST_HOST -u $DEST_USER -P $DEST_PORT -p"$DEST_PASS" -e $createDbQuery
+
+    # Get list of tables
+    $tablesQuery = "SHOW TABLES FROM $Database;"
+    $tables = mysql -h $SOURCE_HOST -u $SOURCE_USER -P $SOURCE_PORT -p"$SOURCE_PASS" -N -e $tablesQuery
+
+    foreach ($table in $tables) {
+        Compare-AndSync -Database $Database -Table $table
+    }
+}
+
+Write-Host "`nDifferential cloning completed!" -ForegroundColor Green
