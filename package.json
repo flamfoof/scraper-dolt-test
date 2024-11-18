@@ -1,7 +1,7 @@
 {
   "name": "deeplink-mysql-db",
   "version": "1.2.0",
-  "description": "Efficient MariaDB cloning and management tool",
+  "description": "Efficient MariaDB cloning and management tool with scraper integration",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
@@ -9,6 +9,8 @@
     "start": "bun run src/commands/start.js",
     "service": "bun run src/commands/service.js",
     "service:uninstall": "bun run src/commands/service.js --uninstall",
+    "setup": "bun run src/commands/setup.js",
+    "setup:sample": "bun run src/commands/setup.js --sample-data 1000",
     "clone": "bun run src/commands/clone.js",
     "diff": "bun run src/commands/clone-diff.js",
     "test": "bun test"
@@ -28,6 +30,22 @@
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
+  "engines": {
+    "node": ">=18.0.0",
+    "bun": ">=1.0.0"
+  },
+  "keywords": [
+    "mariadb",
+    "mysql",
+    "database",
+    "cloning",
+    "scraper",
+    "deeplinks",
+    "movies"
+  ],
   "author": "",
-  "license": "MIT"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/deeplink-mysql-db"
+  }
 }

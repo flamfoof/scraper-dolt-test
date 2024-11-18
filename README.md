@@ -1,21 +1,42 @@
 # Deeplink MySQL DB
 
-A powerful and efficient MariaDB cloning and management tool optimized for handling database operations.
+A powerful and efficient MariaDB cloning and management tool optimized for handling movie metadata across multiple streaming platforms.
 
 ## Features
 
-- **Efficient Database Cloning**: Clone databases with optimized connection pooling and batched operations
-- **Schema Comparison**: Compare database schemas between source and destination
-- **Local Database Management**: Initialize and manage local MariaDB instances
-- **Windows Service Integration**: Run MariaDB as a Windows service with auto-start capability
-- **Progress Tracking**: Visual feedback for long-running operations
-- **Dry Run Mode**: Preview changes before execution
+- **Database Management**
+  - Initialize and manage MariaDB instances
+  - Run as Windows service or standalone
+  - Efficient database cloning
+  - Schema comparison and validation
+  - Sample data generation
+
+- **Movie Metadata Tracking**
+  - Comprehensive movie information storage
+  - Extended metadata with TMDB integration
+  - Platform availability tracking
+  - Pricing and region management
+  - Duplicate detection
+
+- **Scraper Integration**
+  - Configurable scraper management
+  - Activity logging and monitoring
+  - Performance metrics tracking
+  - Error handling and reporting
+  - Scheduled execution support
+
+- **Performance & Security**
+  - Connection pooling
+  - Batched data transfer
+  - Efficient indexing
+  - Secure credential management
+  - Comprehensive audit logging
 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) (>= 1.0.0)
-- MariaDB (>= 10.5)
-- Node.js (>= 18.0.0)
+- [Node.js](https://nodejs.org/) (>= 18.0.0)
+- [MariaDB](https://mariadb.org/) (>= 10.5)
 - Windows OS (for service functionality)
 
 ## Installation
@@ -25,65 +46,60 @@ A powerful and efficient MariaDB cloning and management tool optimized for handl
    ```bash
    bun install
    ```
-3. Copy `sample.env` to `proj.env` and configure your environment variables
-
-## Configuration
-
-Required environment variables in `proj.env`:
-
-```env
-MASTER_DB_HOST=your_source_host
-MASTER_DB_USER=your_source_user
-MASTER_DB_PASS=your_source_password
-MASTER_DB_PORT=3306
-
-LOCAL_DB_HOST=localhost
-LOCAL_DB_USER=your_local_user
-LOCAL_DB_PASS=your_local_password
-LOCAL_DB_PORT=3307
-
-CLONE_DATABASES=db1,db2,db3
-SSH_FILE=your_ssh_key_file
-```
+3. Copy `sample.env` to `proj.env` and configure:
+   ```env
+   MASTER_DB_HOST=your_source_host
+   MASTER_DB_USER=your_source_user
+   MASTER_DB_PASS=your_source_password
+   MASTER_DB_PORT=3306
+   
+   LOCAL_DB_HOST=localhost
+   LOCAL_DB_USER=your_local_user
+   LOCAL_DB_PASS=your_local_password
+   LOCAL_DB_PORT=3307
+   
+   CLONE_DATABASES=db1,db2,db3
+   SSH_FILE=your_ssh_key_file
+   ```
 
 ## Usage
 
-### Initialize Local Database
+### Database Setup
 
-Set up a new local MariaDB instance:
+Initialize the database schema and optionally generate sample data:
 
 ```bash
-bun run init
+# Basic setup
+bun run setup
+
+# Setup with sample data
+bun run setup --sample-data 1000
+
+# Reset database
+bun run setup --reset
 ```
 
-### Run as Windows Service
+### Server Management
 
-Install and start MariaDB as a Windows service (requires Administrator privileges):
+Choose between running as a service or standalone:
 
 ```bash
-# Install and start as service
+# Initialize MariaDB
+bun run init
+
+# Run as Windows service (requires admin)
 bun run service
+
+# Run standalone
+bun run start
 
 # Uninstall service
 bun run service:uninstall
-
-# Service can also be managed using Windows commands:
-net start MariaDB
-net stop MariaDB
-sc.exe query MariaDB
 ```
 
-### Start Database Server (Non-service mode)
+### Data Management
 
-Start the local MariaDB server directly:
-
-```bash
-bun run start
-```
-
-### Clone Databases
-
-Clone databases from source to destination:
+Clone and compare databases:
 
 ```bash
 # Clone specific database
@@ -92,43 +108,102 @@ bun run clone -d database_name
 # Clone with custom batch size
 bun run clone -d database_name -b 5000
 
-# Dry run to preview changes
+# Compare schemas
+bun run diff -d database_name
+
+# Preview changes (dry run)
 bun run clone --dry-run
 ```
 
-### Compare Schemas
+## Database Structure
 
-Compare database schemas between source and destination:
+- **Movies**: Core movie information
+  - Basic details (title, release date)
+  - Activity status tracking
+  - Duplicate detection
 
-```bash
-bun run diff -d database_name
-```
+- **MoviesMetadata**: Extended information
+  - TMDB/IMDB identifiers
+  - Detailed movie attributes
+  - Media assets (posters, backdrops)
+  - Production information
 
-## Commands
+- **Deeplinks**: Platform availability
+  - Streaming platform links
+  - Regional availability
+  - Pricing information
+  - Source tracking
 
-- `init`: Initialize a new MariaDB instance
-- `service`: Install and run MariaDB as a Windows service
-- `start`: Start the MariaDB server (non-service mode)
-- `clone`: Clone databases from source to destination
-- `diff`: Compare database schemas
-- `setup`: Create necessary databases and users
+- **Scrapers**: Configuration
+  - Source definitions
+  - Scheduling settings
+  - Performance parameters
 
-## Architecture
+- **ScrapersActivity**: Operation logs
+  - Run statistics
+  - Error tracking
+  - Performance metrics
 
-The project uses a modular architecture with the following components:
-
-- `src/lib/db-manager.js`: Core database operations
-- `src/commands/`: CLI commands
-  - `init.js`: Database initialization
-  - `service.js`: Windows service management
-  - `start.js`: Direct server startup
-  - `clone.js`: Database cloning
-  - `clone-diff.js`: Schema comparison
-- `src/index.js`: Main entry point
-
+- **AuditLog**: Change tracking
+  - Entity modifications
+  - User actions
+  - Temporal tracking
 
 ## Logging
 
 Logs are stored in:
-- `mysql/logs/error.log`: MariaDB error logs
-- `mysql/logs/mysql.log`: General query logs
+- `mysql/logs/error.log`: MariaDB errors
+- `mysql/logs/mysql.log`: General queries
+- `mysql/logs/audit.log`: Change tracking
+
+## Known Limitations
+
+- Windows-specific service management
+- MariaDB/MySQL compatibility only
+- Environment-specific configuration required
+- Large databases may require significant transfer time
+
+## Development
+
+### Project Structure
+```
+src/
+├── commands/          # CLI commands
+│   ├── init.js       # Database initialization
+│   ├── service.js    # Service management
+│   ├── start.js      # Direct server startup
+│   ├── setup.js      # Schema setup
+│   ├── clone.js      # Database cloning
+│   └── clone-diff.js # Schema comparison
+├── lib/              # Core functionality
+│   └── db-manager.js # Database operations
+├── sql/              # SQL definitions
+│   └── schema.sql    # Database schema
+└── index.js          # Entry point
+```
+
+### Adding New Features
+
+1. Create command in `src/commands/`
+2. Add to `src/index.js`
+3. Update package.json scripts
+4. Document in README.md
+
+## Troubleshooting
+
+Common issues and solutions:
+
+1. **Service won't start**
+   - Run as administrator
+   - Check port availability
+   - Verify credentials
+
+2. **Clone fails**
+   - Check network connectivity
+   - Verify source credentials
+   - Check available space
+
+3. **Schema mismatch**
+   - Run diff command
+   - Check version compatibility
+   - Verify source schema

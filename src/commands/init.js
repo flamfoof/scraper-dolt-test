@@ -10,10 +10,46 @@ config({ path: './proj.env' });
 
 const program = new Command();
 
+const isAdmin = () => {
+  try {
+    execSync('net session', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const elevatePrivileges = async (args) => {
+  const scriptPath = process.argv[1];
+  const processArgs = " " + args.join(' ');
+  
+  // Create a PowerShell command that will show output in a new window
+  const powershellCommand = "Start-Process -FilePath 'bun' -ArgumentList 'run " + 
+  scriptPath + processArgs + 
+  " -Verb RunAs -Wait";
+  
+  try {
+    console.log(chalk.yellow('\nOpening elevated command prompt...'));
+    console.log(chalk.cyan('Please check the new window for command output.'));
+    let command = `powershell.exe -Command "${powershellCommand}"`
+    
+    console.log(command)
+
+    execSync(command, {
+      stdio: 'inherit'
+    });
+    return true;
+  } catch (error) {
+    console.error('Elevation error:', error);
+    return false;
+  }
+};
+
 program
   .name('init')
   .description('Initialize a new MariaDB instance')
   .option('--force', 'Force reinitialization even if directory exists')
+  .option('--no-elevate', 'Do not attempt to auto-elevate privileges')
   .action(async (options) => {
     const spinner = ora('Initializing MariaDB').start();
     
@@ -21,32 +57,70 @@ program
       const currDir = process.cwd().replace(/\\/g, '/');
       const userDir = process.env.USERPROFILE.replace(/\\/g, '/');
       
+      // Check for admin privileges before attempting service operations
+      if (!isAdmin()) {
+        spinner.info(chalk.yellow('Administrator privileges required for service management'));
+        
+        if (!options.noElevate) {
+          spinner.text = 'Requesting administrator privileges...';
+          const elevated = await elevatePrivileges(process.argv.slice(2));
+          
+          if (!elevated) {
+            spinner.fail(chalk.red('Failed to get administrator privileges'));
+            console.log(chalk.yellow('Please run this command manually as administrator'));
+            process.exit(1);
+          }
+          
+          // Since we're using Wait flag, we know the elevated process has completed
+          spinner.succeed('Elevated process completed');
+          // process.exit(0);
+        } else {
+          spinner.fail(chalk.red('This command must be run as Administrator'));
+          console.log(chalk.yellow('\nPlease run this command again with administrator privileges.'));
+          process.exit(1);
+        }
+      }
+      
+      // At this point we have admin privileges
+      console.log(chalk.green('\nRunning with administrator privileges'));
+      
       // Stop and remove existing service
+      spinner.text = 'Checking for existing MariaDB service';
       try {
-        execSync('sc.exe stop mariadb', { stdio: 'ignore' });
-        execSync('sc.exe delete mariadb', { stdio: 'ignore' });
+        console.log(chalk.blue('\nStopping MariaDB service...'));
+        execSync('sc.exe stop mariadb', { stdio: 'inherit' });
+        console.log(chalk.blue('Removing MariaDB service...'));
+        execSync('sc.exe delete mariadb', { stdio: 'inherit' });
+        spinner.succeed('Removed existing MariaDB service');
       } catch (error) {
-        // Ignore errors if service doesn't exist
+        // Log the actual error but continue
+        console.log(chalk.yellow('Service operation message:', error.message));
+        spinner.info('No existing MariaDB service found or unable to remove');
       }
 
       // Setup SSH key
       const sshFile = process.env.SSH_FILE;
       const sshPath = join(userDir, '.ssh', sshFile);
       try {
-        execSync(`ssh-add "${sshPath}"`, { stdio: 'ignore' });
+        console.log(chalk.blue('\nAdding SSH key...'));
+        execSync(`ssh-add "${sshPath}"`, { stdio: 'inherit' });
       } catch (error) {
+        console.log(chalk.yellow('SSH key error:', error.message));
         spinner.warn('SSH key addition failed, continuing...');
       }
 
       // Create directory structure
       spinner.text = 'Creating directory structure';
+      console.log(chalk.blue('\nSetting up directory structure...'));
       await fs.rm('./mysql', { recursive: true, force: true });
       await fs.mkdir('./mysql', { recursive: true });
       await fs.mkdir('./mysql/logs', { recursive: true });
       await fs.mkdir('./mysql/data', { recursive: true });
+      console.log(chalk.green('Directory structure created successfully'));
 
       // Create MariaDB configuration
       spinner.text = 'Creating MariaDB configuration';
+      console.log(chalk.blue('\nGenerating MariaDB configuration...'));
       const mariadbConfig = {
         mysqld: {
           'log-bin': 'mysql-bin',
@@ -87,6 +161,7 @@ program
             .join('\n')}`
         )).join('\n\n')
       );
+      console.log(chalk.green('Configuration file created successfully'));
 
       spinner.succeed('MariaDB initialization completed');
       console.log(chalk.green('\nNext steps:'));
@@ -95,6 +170,7 @@ program
 
     } catch (error) {
       spinner.fail(`Error: ${error.message}`);
+      console.error(chalk.red('\nDetailed error:'), error);
       process.exit(1);
     }
   });
