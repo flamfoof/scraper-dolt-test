@@ -145,7 +145,7 @@ CREATE INDEX AuditLogTime_IDX USING BTREE ON AuditLog (created_at);
 -- Triggers for automatic audit logging
 DELIMITER //
 
-CREATE TRIGGER Movies_Audit_Insert
+CREATE TRIGGER IF NOT EXISTS Movies_Audit_Insert 
 AFTER INSERT ON Movies
 FOR EACH ROW
 BEGIN
@@ -157,9 +157,9 @@ BEGIN
             'isActive', NEW.isActive
         )
     );
-END//
+END //
 
-CREATE TRIGGER Movies_Audit_Update
+CREATE TRIGGER IF NOT EXISTS Movies_Audit_Update 
 AFTER UPDATE ON Movies
 FOR EACH ROW
 BEGIN
@@ -180,9 +180,9 @@ BEGIN
             )
         );
     END IF;
-END//
+END //
 
-CREATE TRIGGER Deeplinks_Audit
+CREATE TRIGGER IF NOT EXISTS Deeplinks_Audit 
 AFTER UPDATE ON Deeplinks
 FOR EACH ROW
 BEGIN
@@ -201,44 +201,6 @@ BEGIN
             )
         );
     END IF;
-END//
-
--- Procedure for generating test data
-CREATE PROCEDURE InsertRandomData(IN count INT)
-BEGIN
-    DECLARE i INT DEFAULT 1;
-    WHILE i <= count DO
-        SET @uuid = UUID_TO_BIN(UUID());
-        SET @dlid = UUID_TO_BIN(UUID());
-        
-        -- Insert movie
-        INSERT INTO Movies (contentId, title)
-        VALUES (@uuid, CONCAT('Movie ', i));
-        
-        -- Insert metadata
-        INSERT INTO MoviesMetadata (contentId, deeplinkRefId, title, tmdbId)
-        VALUES (@uuid, @dlid, CONCAT('Movie ', i), CONCAT('tt', LPAD(i, 7, '0')));
-        
-        -- Insert deeplink
-        INSERT INTO Deeplinks (contentId, deeplinkRefId, sourceType)
-        VALUES (@uuid, @dlid, 'test');
-        
-        SET i = i + 1;
-    END WHILE;
-END//
+END //
 
 DELIMITER ;
-
--- Create test scraper
-INSERT INTO Scrapers (scraperId, sourceSlug, title, scraperSrcTitle, config)
-VALUES (
-    UUID_TO_BIN(UUID()),
-    'test-scraper',
-    'Test Scraper',
-    'Test Source',
-    JSON_OBJECT(
-        'enabled', true,
-        'interval', 3600,
-        'timeout', 300
-    )
-);
