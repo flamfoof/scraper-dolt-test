@@ -1,88 +1,101 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import { join } from 'path';
-import { spawnSync } from 'bun';
+import { sleep } from 'bun';
+import { isAdmin, adminChecker } from '../lib/privilege.js';
+import ora from 'ora';
+import { config } from 'dotenv';
+
+config({ path: './proj.env' });
 
 const program = new Command();
 
-const isAdmin = () => {
-  try {
-    execSync('net session', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const elevatePrivileges = async () => {
-  const scriptPath = process.argv[1];
-  const args = process.argv.slice(2);
-  
-  const powershellCommand = `Start-Process -FilePath 'bun' -ArgumentList 'run ${scriptPath} ${args.join(' ')}' -Verb RunAs -Wait`
-  
-  try {
-    console.log(chalk.yellow('\nElevating privileges for MariaDB service management...'));
-    console.log(chalk.cyan('Please approve the elevation request in the new window.'));
-    console.log(powershellCommand)
-    //don't close spawn window
-    execSync(`powershell.exe -Command "${powershellCommand}"`)
-    console.log(`cmd /c start powershell.exe -Command "${powershellCommand}"`)
-    return true;
-  } catch (error) {
-    console.error('Elevation error:', error);
-    return false;
-  }
-};
-
-const stopMariaDBService = async () => {
+/**
+ * Stops and removes the MariaDB service if it exists
+ */
+const stopMariaDBService = async (spinner) => {
   try {
     // Check if MariaDB service exists
-    const checkService = execSync(['sc', 'query', 'mariadb']);
+    spinner.text = 'Checking MariaDB service status';
+    const checkService = execSync('sc query mariadb');
     
     if (checkService.exitCode === 0) {
-      console.log(chalk.yellow('Stopping MariaDB service...'));
+      spinner.text = 'Stopping MariaDB service';
+      console.log(chalk.blue('\nStopping MariaDB service...'));
       
       // Stop the service
       execSync('sc stop mariadb', { stdio: 'inherit' });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await sleep(1000);
       
       // Delete the service
+      console.log(chalk.blue('Removing MariaDB service...'));
       execSync('sc delete mariadb', { stdio: 'inherit' });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await sleep(4000);
       
-      console.log(chalk.green('MariaDB service stopped and removed.'));
+      spinner.succeed('MariaDB service stopped and removed');
     } else {
-      console.log(chalk.yellow('MariaDB service not found.'));
+      spinner.info('MariaDB service not found');
     }
   } catch (error) {
-    console.error(chalk.red('Error managing MariaDB service:'), error);
-    throw error;
+    console.log(chalk.yellow('Service operation message:', error.message));
+    spinner.info('No existing MariaDB service found or unable to remove');
   }
 };
 
-const createMariaDBService = async () => {
+/**
+ * Creates and starts the MariaDB service
+ */
+const createMariaDBService = async (spinner) => {
   try {
-    console.log(chalk.yellow('Installing MariaDB service...'));
+    spinner.text = 'Installing MariaDB service';
+    console.log(chalk.blue('\nInstalling MariaDB service...'));
     
     // Get the project root directory
     const projectRoot = process.cwd();
     const configPath = join(projectRoot, 'mariadb_local.ini');
     
     // Install the service using mysql_install_db
-    execSync(`mysql_install_db --service MariaDB -c "${configPath}" -p admin`, {
+    execSync(`mysql_install_db --service MariaDB -c "${configPath}" -p "${process.env.LOCAL_DB_PASS}"`, {
       stdio: 'inherit'
     });
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await sleep(1000);
     
     // Start the service
+    spinner.text = 'Starting MariaDB service';
+    console.log(chalk.blue('\nStarting MariaDB service...'));
     execSync('sc start MariaDB', { stdio: 'inherit' });
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await sleep(3000);
     
-    console.log(chalk.green('MariaDB service installed and started successfully.'));
+    spinner.succeed('MariaDB service installed and started successfully');
   } catch (error) {
-    console.error(chalk.red('Error creating MariaDB service:'), error);
+    spinner.fail('Error creating MariaDB service');
+    await sleep(3000);
     throw error;
+  }
+};
+
+/**
+ * Main service management function
+ */
+const manageService = async (spinner, options) => {
+  if (options.uninstall) {
+    await stopMariaDBService(spinner);
+  } else {
+    if (options.reinstall) {
+      await stopMariaDBService(spinner);
+    }
+    await createMariaDBService(spinner);
+  }
+  
+  // Display next steps
+  console.log(chalk.green('\nNext steps:'));
+  if (options.uninstall) {
+    console.log('1. Run "bun run service" to reinstall the service');
+    console.log('2. Run "bun run setup" to recreate databases and users');
+  } else {
+    console.log('1. Run "bun run setup" to create necessary databases and users');
+    console.log('2. Use "bun run clone" to start syncing data');
   }
 };
 
@@ -90,26 +103,28 @@ program
   .name('service')
   .description('Manage MariaDB service')
   .option('--reinstall', 'Reinstall the MariaDB service')
+  .option('--uninstall', 'Uninstall the MariaDB service')
+  .option('--no-elevate', 'Do not attempt to auto-elevate privileges')
   .action(async (options) => {
+    const spinner = ora('Managing MariaDB service').start();
+    
     try {
-      // Check for admin privileges
-      if (!isAdmin()) {
-        console.log(chalk.yellow('Requesting administrator privileges...'));
-        const elevated = await elevatePrivileges();
-        if (!elevated) {
-          console.error(chalk.red('Failed to obtain administrator privileges.'));
-          process.exit(1);
-        }
-        return;
-      }
-
-      if (options.reinstall) {
-        await stopMariaDBService();
-      }
+      // Check for admin privileges and handle elevation if needed
+      await adminChecker(spinner, options);
       
-      await createMariaDBService();
+      // At this point we have admin privileges
+      console.log(chalk.green('\nRunning with administrator privileges'));
+      
+      // Run the main service management function
+      await manageService(spinner, options);
+      await sleep(3000);
+      process.exit(0);
+
     } catch (error) {
-      console.error(chalk.red('Service management failed:'), error);
+      spinner.fail(`Error: ${error.message}`);
+      console.error(chalk.red('\nDetailed error:'));
+      console.error(error);
+      await sleep(3000);
       process.exit(1);
     }
   });
