@@ -1,5 +1,5 @@
--- CREATE DATABASE `Tmdb`;
--- use Tmdb
+CREATE DATABASE IF NOT EXISTS `Tmdb`;
+use Tmdb;
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `ScrapersActivity`;
