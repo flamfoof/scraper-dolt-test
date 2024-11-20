@@ -1,1 +1,1 @@
-powershell mysql_deeplink_start.ps1
+powershell ./mysql_deeplink_start.ps1

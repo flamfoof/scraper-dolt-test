@@ -1,1 +1,1 @@
-powershell mysql_deeplink_flush.ps1
+powershell ./mysql_deeplink_flush.ps1
