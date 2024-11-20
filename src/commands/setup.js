@@ -57,7 +57,6 @@ const parseSQLSections = (sql) => {
 			}
 		}
 
-		console.log(`Line: ${line}`);
 		// Start new section when creating a table
 		if (line.startsWith("CREATE")) {
 			const createMatches = line.match(/CREATE (\w+) ?(?:`(.*)`|(\w+))/);
@@ -95,6 +94,18 @@ const parseSQLSections = (sql) => {
 
 				currentSection = { name: `Alter ${alterName} ${alterType}`, sql: "" };
 			}
+		} else if (line.startsWith("CALL")) {
+			const callMatches = line.match(/CALL (\w+) ?(?:`(.*)`|(\w+))/);
+			if (callMatches) {
+				const [_, callType, callName1, callName2] = callMatches;
+				const callName = callName1 || callName2;
+
+				finishSectionParse();
+
+				debug.log("Parser", `Starting new ${callType.toLowerCase()} section: ${callName}`);
+
+				currentSection = { name: `Call ${callName} ${callType}`, sql: "" };
+			}
 		}
 
 		// Start new section for triggers
@@ -116,7 +127,6 @@ const parseSQLSections = (sql) => {
 
 		if (line.endsWith(delimiterChar)) {
 			finishSectionParse();
-			console.log(currentSection.sql);
 			currentSection = { name: currentSection.name, sql: "" };
 		}
 	}
@@ -124,7 +134,6 @@ const parseSQLSections = (sql) => {
 	// Add last section if not empty
 	if (currentSection.sql.trim()) {
 		finishSectionParse();
-		console.log(currentSection.sql);
 	}
 
 	debug.log("Parser", `Parsing complete. Total sections: ${sections.length}`);
@@ -156,7 +165,7 @@ const executeSQLSection = async (connection, name, sql, spinner) => {
 		debug.log("Executor", "SQL to execute:", sql);
 		spinner.text = `Executing ${name}`;
 		if(sql.startsWith("DELIMITER")){
-			await connection.execute("DELIMITER " + sql.delimiter);
+			// await connection.execute("DELIMITER " + sql.delimiter);
 		} else {
 			await connection.query(sql);
 		}
@@ -165,7 +174,6 @@ const executeSQLSection = async (connection, name, sql, spinner) => {
 		debug.log("Executor", `Successfully completed section: ${name}`);
 	} catch (error) {
 		spinner.fail(`Failed in ${name}`);
-		// console.log(sql)
 		debug.error("Executor", `Failed executing section: ${name}`, error);
 		// console.error(chalk.red(`Error in ${name}:`));
 		// console.error(chalk.yellow(error.message));
@@ -216,9 +224,6 @@ program
 			const sections = parseSQLSections(schema);
 			debug.log("Setup", `Parsed ${sections.length} sections to execute`);
 			
-			// await connection.batch(schema);
-			// await connection.queryStream(schema)
-			// await mariadb.createConnection().
 			for (const section of sections) {
 				await executeSQLSection(connection, section.name, section.sql, spinner);
 			}
