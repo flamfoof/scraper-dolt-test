@@ -6,8 +6,8 @@ USE Tmdb;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `ScrapersActivity`;
 DROP TABLE IF EXISTS `Scrapers`;
-DROP TABLE IF EXISTS `MovieDeeplinks`;
-DROP TABLE IF EXISTS `EpisodeDeeplinks`;
+DROP TABLE IF EXISTS `MoviesDeeplinks`;
+DROP TABLE IF EXISTS `EpisodesDeeplinks`;
 DROP TABLE IF EXISTS `MoviesMetadata`;
 DROP TABLE IF EXISTS `SeriesMetadata`;
 DROP TABLE IF EXISTS `SeasonsMetadata`;
@@ -213,13 +213,13 @@ CREATE TABLE EpisodesMetadata (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movie Deeplinks table for storing platform-specific movie links
-CREATE TABLE MovieDeeplinks (
+CREATE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
     contentRefId UUID NULL COMMENT 'Reference to Movies.deeplinkRefId',
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
-    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood') DEFAULT 'none' NOT NULL,
+    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     platformLinks JSON NULL COMMENT '{
         "web": "https://example.com/watch/movie-123",
@@ -240,19 +240,20 @@ CREATE TABLE MovieDeeplinks (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT MovieDeeplinksContent_UK UNIQUE KEY (contentId),
-    CONSTRAINT MovieDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
-        REFERENCES Movies(contentId)
+    CONSTRAINT MoviesDeeplinksContent_UK UNIQUE KEY (contentId),
+    CONSTRAINT MoviesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
+    CONSTRAINT MoviesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
+        REFERENCES Movies(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episode Deeplinks table for storing platform-specific episode links
-CREATE TABLE EpisodeDeeplinks (
+CREATE TABLE EpisodesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
     contentRefId UUID NULL COMMENT 'Reference to Episodes.deeplinkRefId',
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
-    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood') DEFAULT 'none' NOT NULL,
+    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     platformLinks JSON NULL COMMENT '{
         "web": "https://example.com/watch/episode-123",
@@ -273,9 +274,10 @@ CREATE TABLE EpisodeDeeplinks (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT EpisodeDeeplinksContent_UK UNIQUE KEY (contentId),
-    CONSTRAINT EpisodeDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
-        REFERENCES Episodes(contentId)
+    CONSTRAINT EpisodesDeeplinksContent_UK UNIQUE KEY (contentId),
+    CONSTRAINT EpisodesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
+    CONSTRAINT EpisodesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
+        REFERENCES Episodes(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Base content type enum
@@ -365,13 +367,13 @@ CREATE INDEX EpisodesMetadataContent_IDX USING BTREE ON EpisodesMetadata (conten
 
 CREATE INDEX SeriesMetadataTitle_IDX USING BTREE ON SeriesMetadata (title);
 
-CREATE INDEX MovieDeeplinksContent_IDX USING BTREE ON MovieDeeplinks (contentId);
-CREATE INDEX MovieDeeplinksRef_IDX USING BTREE ON MovieDeeplinks (contentRefId);
-CREATE INDEX MovieDeeplinksSource_IDX USING BTREE ON MovieDeeplinks (sourceId, sourceType, region);
+CREATE INDEX MoviesDeeplinksContent_IDX USING BTREE ON MoviesDeeplinks (contentId);
+CREATE UNIQUE INDEX MoviesDeeplinksRefSource_UK ON MoviesDeeplinks (contentRefId, sourceId, originSource);
+CREATE INDEX MoviesDeeplinksSource_IDX USING BTREE ON MoviesDeeplinks (sourceId, sourceType, region);
 
-CREATE INDEX EpisodeDeeplinksContent_IDX USING BTREE ON EpisodeDeeplinks (contentId);
-CREATE INDEX EpisodeDeeplinksRef_IDX USING BTREE ON EpisodeDeeplinks (contentRefId);
-CREATE INDEX EpisodeDeeplinksSource_IDX USING BTREE ON EpisodeDeeplinks (sourceId, sourceType, region);
+CREATE INDEX EpisodesDeeplinksContent_IDX USING BTREE ON EpisodesDeeplinks (contentId);
+CREATE UNIQUE INDEX EpisodesDeeplinksRefSource_UK ON EpisodesDeeplinks (contentRefId, sourceId, originSource);
+CREATE INDEX EpisodesDeeplinksSource_IDX USING BTREE ON EpisodesDeeplinks (sourceId, sourceType, region);
 
 CREATE INDEX ScrapersActivityRun_IDX USING BTREE ON ScrapersActivity (runId);
 CREATE INDEX ScrapersActivityTime_IDX USING BTREE ON ScrapersActivity (startTime);
@@ -551,8 +553,8 @@ BEGIN
     DECLARE series_content_id UUID;
     DECLARE season_content_id UUID;
     DECLARE episode_content_id UUID;
-    DECLARE movie_deeplink_ref_id UUID;
-    DECLARE episode_deeplink_ref_id UUID;
+    DECLARE movie_deeplink_id UUID;
+    DECLARE episode_deeplink_id UUID;
     
     WHILE i <= 1000 DO
         -- Generate UUIDs
@@ -560,42 +562,36 @@ BEGIN
         SET series_content_id = UUID();
         SET season_content_id = UUID();
         SET episode_content_id = UUID();
-        SET movie_deeplink_ref_id = UUID();
-        SET episode_deeplink_ref_id = UUID();
+        SET movie_deeplink_id = UUID();
+        SET episode_deeplink_id = UUID();
         
         -- Insert a movie and its related records
         INSERT INTO Movies (contentId, title, tmdbId)
         VALUES (movie_content_id, CONCAT('Movie ', i), i+1000);
         
-        -- INSERT INTO MoviesMetadata (contentId, imdbId, rgId)
-        -- VALUES (movie_content_id, CONCAT('tt', LPAD(i, 7, '0')), CONCAT('rg', i));
-        
-        INSERT INTO MovieDeeplinks (contentId, sourceId, sourceType, region, platformLinks)
-        VALUES (movie_content_id, 69, 'tmdb', 'US', '{"web": "https://example.com/movie-123"}');
+        -- Create multiple deeplinks for the same movie with different sources
+        INSERT INTO MoviesDeeplinks (contentId, contentRefId, sourceId, sourceType, originSource, region, platformLinks)
+        VALUES 
+            (movie_deeplink_id, movie_content_id, 69, 'didney-world', 'tmdb', 'US', '{"web": "https://example.com/movie-123"}'),
+            (UUID(), movie_content_id, 69, 'fidney-world', 'freecast', 'US', '{"web": "https://example.com/movie-123"}');
         
         -- Insert a series and its related records
         INSERT INTO Series (contentId, title, tmdbId)
         VALUES (series_content_id, CONCAT('TV Series ', i), i+1000);
         
-        -- INSERT INTO SeriesMetadata (contentId, imdbId, rgId)
-        -- VALUES (series_content_id, CONCAT('tt', LPAD(i+1000, 7, '0')), CONCAT('rg', i+1000));
-        
         -- Insert a season
         INSERT INTO Seasons (contentId, contentRefId, seasonNumber)
         VALUES (season_content_id, series_content_id, 1);
-        
-        -- INSERT INTO SeasonsMetadata (contentId)
-        -- VALUES (season_content_id);
         
         -- Insert an episode
         INSERT INTO Episodes (contentId, contentRefId, episodeNumber, title, tmdbId)
         VALUES (episode_content_id, season_content_id, 1, CONCAT('Episode ', i), i+1000);
         
-        -- INSERT INTO EpisodesMetadata (contentId, imdbId, rgId)
-        -- VALUES (episode_content_id, CONCAT('tt', LPAD(i+2000, 7, '0')), CONCAT('rg', i+2000));
-        
-        INSERT INTO EpisodeDeeplinks (contentId, sourceId, sourceType, region, platformLinks)
-        VALUES (episode_content_id, 69, 'tmdb', 'US', '{\"web\": \"https://example.com/movie-123\"}');
+        -- Create multiple deeplinks for the same episode with different sources
+        INSERT INTO EpisodesDeeplinks (contentId, contentRefId, sourceId, sourceType, originSource, region, platformLinks)
+        VALUES 
+            (episode_deeplink_id, episode_content_id, 69, 'didney-world', 'tmdb', 'US', '{"web": "https://example.com/episode-123"}'),
+            (UUID(), episode_content_id, 69, 'fidney-world', 'freecast', 'US', '{"web": "https://example.com/episode-123"}');
         
         SET i = i + 1;
     END WHILE;
