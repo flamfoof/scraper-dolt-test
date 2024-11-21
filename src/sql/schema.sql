@@ -37,10 +37,11 @@ INSERT INTO ContentTypes (id, name) VALUES
 CREATE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    deeplinkRefId UUID NOT NULL,
+    tmdbId VARCHAR(20) NULL,
     title VARCHAR(255) NOT NULL,
     altTitle VARCHAR(255) NULL,
     releaseDate DATE NULL,
+    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     isDupe BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -78,6 +79,7 @@ CREATE TABLE MoviesMetadata (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT MoviesMetadataUuid_UK UNIQUE KEY (contentId),
+    CONSTRAINT MoviesMetadataTmdb_UK UNIQUE KEY (tmdbId),
     CONSTRAINT MoviesMetadataMovie_FK FOREIGN KEY (contentId) 
         REFERENCES Movies(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -86,19 +88,19 @@ CREATE TABLE MoviesMetadata (
 CREATE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
+    tmdbId VARCHAR(20) NULL,
     title VARCHAR(255) NOT NULL,
     altTitle VARCHAR(255) NULL,
     releaseDate DATE NULL,
-    seasonContentIds JSON NULL COMMENT 'Array of season contentIds',
     totalSeasons INT UNSIGNED DEFAULT 0 NULL,
     totalEpisodes INT UNSIGNED DEFAULT 0 NULL,
+    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     isDupe BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT SeriesUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT SeriesSeasons_CHK CHECK (JSON_VALID(seasonContentIds))
+    CONSTRAINT SeriesUuid_UK UNIQUE KEY (contentId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Series Metadata
@@ -121,8 +123,8 @@ CREATE TABLE SeriesMetadata (
     keywords JSON NULL,
     cast JSON NULL,
     crew JSON NULL,
-    networks JSON NULL,
     productionCompanies JSON NULL,
+    networks JSON NULL,
     lastUpdated TIMESTAMP NULL,
     updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
@@ -130,6 +132,7 @@ CREATE TABLE SeriesMetadata (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT SeriesMetadataUuid_UK UNIQUE KEY (contentId),
+    CONSTRAINT SeriesMetadataTmdb_UK UNIQUE KEY (tmdbId),
     CONSTRAINT SeriesMetadataSeries_FK FOREIGN KEY (contentId) 
         REFERENCES Series(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -139,17 +142,19 @@ CREATE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     seriesContentId UUID NOT NULL,
-    seasonNumber INT DEFAULT -1 NOT NULL,
-    episodeContentIds JSON NULL COMMENT 'Array of episode contentIds',
-    episodeCount INT UNSIGNED DEFAULT 0 NULL,
+    title VARCHAR(255) NULL,
+    seasonNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
+    episodeCount SMALLINT UNSIGNED DEFAULT 0 NULL,
     releaseDate DATE NULL,
+    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT SeasonsUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT SeasonNumber_UK UNIQUE KEY (seriesContentId, seasonNumber),
-    CONSTRAINT SeasonsEpisodes_CHK CHECK (JSON_VALID(episodeContentIds))
+    CONSTRAINT SeasonsNumber_UK UNIQUE KEY (seriesContentId, seasonNumber),
+    CONSTRAINT SeasonsSeries_FK FOREIGN KEY (seriesContentId) 
+        REFERENCES Series(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seasons Metadata
@@ -157,7 +162,6 @@ CREATE TABLE SeasonsMetadata (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     seriesContentId UUID NOT NULL,
-    tmdbId VARCHAR(20) NULL,
     title VARCHAR(255) NULL,
     description TEXT NULL,
     episodeCount SMALLINT UNSIGNED NULL,
@@ -180,17 +184,19 @@ CREATE TABLE SeasonsMetadata (
 CREATE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    deeplinkRefId UUID NOT NULL,
     seasonContentId UUID NOT NULL,
     episodeNumber SMALLINT DEFAULT -1 NOT NULL,
     title VARCHAR(255) NOT NULL,
     releaseDate DATE NULL,
+    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT EpisodesUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT EpisodeNumber_UK UNIQUE KEY (seasonContentId, episodeNumber)
+    CONSTRAINT EpisodesSeason_FK FOREIGN KEY (seasonContentId)
+        REFERENCES Seasons(contentId) ON DELETE CASCADE,
+    INDEX EpisodesSeasonEpisode_IDX (seasonContentId, episodeNumber)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episodes Metadata
@@ -198,7 +204,6 @@ CREATE TABLE EpisodesMetadata (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     seasonContentId UUID NOT NULL,
-    tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(64) NULL,
     title VARCHAR(255) NULL,
@@ -217,7 +222,7 @@ CREATE TABLE EpisodesMetadata (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT EpisodesMetadataUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT EpisodesMetadataEpisode_FK FOREIGN KEY (contentId) 
+    CONSTRAINT EpisodesMetadataEpisode_FK FOREIGN KEY (contentId)
         REFERENCES Episodes(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -225,6 +230,7 @@ CREATE TABLE EpisodesMetadata (
 CREATE TABLE MovieDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to Movies.deeplinkRefId',
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood') DEFAULT 'none' NOT NULL,
@@ -249,15 +255,16 @@ CREATE TABLE MovieDeeplinks (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT MovieDeeplinksContent_UK UNIQUE KEY (contentId, sourceId, sourceType, region),
-    CONSTRAINT MovieDeeplinksMovies_FK FOREIGN KEY (contentId) 
-        REFERENCES Movies(contentId) ON DELETE CASCADE
+    CONSTRAINT MovieDeeplinksContent_UK UNIQUE KEY (contentId),
+    CONSTRAINT MovieDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
+        REFERENCES Movies(contentId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episode Deeplinks table for storing platform-specific episode links
 CREATE TABLE EpisodeDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to Episodes.deeplinkRefId',
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood') DEFAULT 'none' NOT NULL,
@@ -282,9 +289,9 @@ CREATE TABLE EpisodeDeeplinks (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT EpisodeDeeplinksContent_UK UNIQUE KEY (contentId, sourceId, sourceType, region),
-    CONSTRAINT EpisodeDeeplinksEpisodes_FK FOREIGN KEY (contentId) 
-        REFERENCES Episodes(contentId) ON DELETE CASCADE
+    CONSTRAINT EpisodeDeeplinksContent_UK UNIQUE KEY (contentId),
+    CONSTRAINT EpisodeDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
+        REFERENCES Episodes(contentId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Scrapers Configuration
@@ -353,14 +360,14 @@ CREATE INDEX SeriesActive_IDX USING BTREE ON Series (isActive);
 CREATE INDEX SeasonsShow_IDX USING BTREE ON Seasons (seriesContentId, seasonNumber);
 CREATE INDEX SeasonsActive_IDX USING BTREE ON Seasons (isActive);
 
-CREATE INDEX EpisodesSeason_IDX USING BTREE ON Episodes (seasonContentId, episodeNumber);
+CREATE INDEX EpisodesSeason_IDX USING BTREE ON Episodes (seasonContentId);
 CREATE INDEX EpisodesActive_IDX USING BTREE ON Episodes (isActive);
 
-CREATE INDEX MoviesMetadataImdb_IDX USING BTREE ON MoviesMetadata (imdbId);
-CREATE INDEX MoviesMetadataRg_IDX USING BTREE ON MoviesMetadata (rgId);
+CREATE INDEX MoviesMetadataContent_IDX USING BTREE ON MoviesMetadata (contentId);
+CREATE INDEX SeriesMetadataContent_IDX USING BTREE ON SeriesMetadata (contentId);
+CREATE INDEX SeasonsMetadataContent_IDX USING BTREE ON SeasonsMetadata (contentId);
+CREATE INDEX EpisodesMetadataContent_IDX USING BTREE ON EpisodesMetadata (contentId);
 
-CREATE INDEX SeriesMetadataImdb_IDX USING BTREE ON SeriesMetadata (imdbId);
-CREATE INDEX SeriesMetadataRg_IDX USING BTREE ON SeriesMetadata (rgId);
 CREATE INDEX SeriesMetadataTitle_IDX USING BTREE ON SeriesMetadata (title);
 
 CREATE INDEX SeasonsMetadataShow_IDX USING BTREE ON SeasonsMetadata (seriesContentId);
@@ -368,9 +375,11 @@ CREATE INDEX SeasonsMetadataShow_IDX USING BTREE ON SeasonsMetadata (seriesConte
 CREATE INDEX EpisodesMetadataSeason_IDX USING BTREE ON EpisodesMetadata (seasonContentId);
 
 CREATE INDEX MovieDeeplinksContent_IDX USING BTREE ON MovieDeeplinks (contentId);
+CREATE INDEX MovieDeeplinksRef_IDX USING BTREE ON MovieDeeplinks (contentRefId);
 CREATE INDEX MovieDeeplinksSource_IDX USING BTREE ON MovieDeeplinks (sourceId, sourceType, region);
 
 CREATE INDEX EpisodeDeeplinksContent_IDX USING BTREE ON EpisodeDeeplinks (contentId);
+CREATE INDEX EpisodeDeeplinksRef_IDX USING BTREE ON EpisodeDeeplinks (contentRefId);
 CREATE INDEX EpisodeDeeplinksSource_IDX USING BTREE ON EpisodeDeeplinks (sourceId, sourceType, region);
 
 CREATE INDEX ScrapersActivityRun_IDX USING BTREE ON ScrapersActivity (runId);
@@ -458,18 +467,7 @@ CREATE TRIGGER Seasons_Series_Insert AFTER INSERT ON Seasons
 FOR EACH ROW
 BEGIN
     UPDATE Series 
-    SET seasonContentIds = JSON_ARRAY_APPEND(
-        COALESCE(seasonContentIds, JSON_ARRAY()),
-        '$',
-        NEW.contentId
-    ),
-    totalSeasons = JSON_LENGTH(
-        JSON_ARRAY_APPEND(
-            COALESCE(seasonContentIds, JSON_ARRAY()),
-            '$',
-            NEW.contentId
-        )
-    )
+    SET totalSeasons = totalSeasons + 1
     WHERE contentId = NEW.seriesContentId;
 END //
 
@@ -478,16 +476,7 @@ CREATE TRIGGER Seasons_Series_Delete AFTER DELETE ON Seasons
 FOR EACH ROW
 BEGIN
     UPDATE Series 
-    SET seasonContentIds = JSON_REMOVE(
-        seasonContentIds,
-        JSON_UNQUOTE(JSON_SEARCH(seasonContentIds, 'one', OLD.contentId))
-    ),
-    totalSeasons = JSON_LENGTH(
-        JSON_REMOVE(
-            seasonContentIds,
-            JSON_UNQUOTE(JSON_SEARCH(seasonContentIds, 'one', OLD.contentId))
-        )
-    )
+    SET totalSeasons = totalSeasons - 1
     WHERE contentId = OLD.seriesContentId;
 END //
 
@@ -496,18 +485,7 @@ CREATE TRIGGER Episodes_Seasons_Insert AFTER INSERT ON Episodes
 FOR EACH ROW
 BEGIN
     UPDATE Seasons 
-    SET episodeContentIds = JSON_ARRAY_APPEND(
-        COALESCE(episodeContentIds, JSON_ARRAY()),
-        '$',
-        NEW.contentId
-    ),
-    episodeCount = JSON_LENGTH(
-        JSON_ARRAY_APPEND(
-            COALESCE(episodeContentIds, JSON_ARRAY()),
-            '$',
-            NEW.contentId
-        )
-    )
+    SET episodeCount = episodeCount + 1
     WHERE contentId = NEW.seasonContentId;
 END //
 
@@ -516,16 +494,7 @@ CREATE TRIGGER Episodes_Seasons_Delete AFTER DELETE ON Episodes
 FOR EACH ROW
 BEGIN
     UPDATE Seasons 
-    SET episodeContentIds = JSON_REMOVE(
-        episodeContentIds,
-        JSON_UNQUOTE(JSON_SEARCH(episodeContentIds, 'one', OLD.contentId))
-    ),
-    episodeCount = JSON_LENGTH(
-        JSON_REMOVE(
-            episodeContentIds,
-            JSON_UNQUOTE(JSON_SEARCH(episodeContentIds, 'one', OLD.contentId))
-        )
-    )
+    SET episodeCount = episodeCount - 1
     WHERE contentId = OLD.seasonContentId;
 END //
 
@@ -542,7 +511,7 @@ BEGIN
     DECLARE movie_deeplink_ref_id UUID;
     DECLARE episode_deeplink_ref_id UUID;
     
-    WHILE i <= 100000 DO
+    WHILE i <= 1000 DO
         -- Generate UUIDs
         SET movie_content_id = UUID();
         SET series_content_id = UUID();
@@ -552,14 +521,14 @@ BEGIN
         SET episode_deeplink_ref_id = UUID();
         
         -- Insert a movie and its related records
-        INSERT INTO Movies (contentId, deeplinkRefId, title)
-        VALUES (movie_content_id, movie_deeplink_ref_id, CONCAT('Movie ', i));
+        INSERT INTO Movies (contentId, title)
+        VALUES (movie_content_id, CONCAT('Movie ', i));
         
         INSERT INTO MoviesMetadata (contentId, imdbId, rgId)
         VALUES (movie_content_id, CONCAT('tt', LPAD(i, 7, '0')), CONCAT('rg', i));
         
-        INSERT INTO MovieDeeplinks (contentId, sourceId, sourceType, region)
-        VALUES (movie_content_id, 69, 'tmdb', 'US');
+        INSERT INTO MovieDeeplinks (contentId, contentRefId, sourceId, sourceType, region, url, platform)
+        VALUES (movie_content_id, movie_deeplink_ref_id, 69, 'tmdb', 'US', 'https://example.com', 'web');
         
         -- Insert a series and its related records
         INSERT INTO Series (contentId, title)
@@ -572,12 +541,12 @@ BEGIN
         INSERT INTO Seasons (contentId, seriesContentId, seasonNumber)
         VALUES (season_content_id, series_content_id, 1);
         
-        INSERT INTO SeasonsMetadata (contentId, seriesContentId, tmdbId)
-        VALUES (season_content_id, series_content_id, i);
+        INSERT INTO SeasonsMetadata (contentId, seriesContentId)
+        VALUES (season_content_id, series_content_id);
         
         -- Insert an episode
-        INSERT INTO Episodes (contentId, deeplinkRefId, seasonContentId, episodeNumber, title)
-        VALUES (episode_content_id, episode_deeplink_ref_id, season_content_id, 1, CONCAT('Episode ', i));
+        INSERT INTO Episodes (contentId, seasonContentId, episodeNumber, title)
+        VALUES (episode_content_id, season_content_id, 1, CONCAT('Episode ', i));
         
         INSERT INTO EpisodesMetadata (contentId, seasonContentId, imdbId, rgId)
         VALUES (episode_content_id, season_content_id, CONCAT('tt', LPAD(i+2000, 7, '0')), CONCAT('rg', i+2000));
@@ -591,4 +560,4 @@ END //
 
 DELIMITER ;
 
-CALL InsertRandomData();
+-- CALL InsertRandomData();
