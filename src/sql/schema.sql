@@ -4,20 +4,77 @@ USE Tmdb;
 
 -- Disable foreign key checks for clean setup
 SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS `ScrapersActivity`;
-DROP TABLE IF EXISTS `Scrapers`;
-DROP TABLE IF EXISTS `MoviesDeeplinks`;
-DROP TABLE IF EXISTS `EpisodesDeeplinks`;
-DROP TABLE IF EXISTS `MoviesMetadata`;
-DROP TABLE IF EXISTS `SeriesMetadata`;
-DROP TABLE IF EXISTS `SeasonsMetadata`;
-DROP TABLE IF EXISTS `EpisodesMetadata`;
-DROP TABLE IF EXISTS `Movies`;
-DROP TABLE IF EXISTS `Series`;
-DROP TABLE IF EXISTS `Seasons`;
-DROP TABLE IF EXISTS `Episodes`;
-DROP TABLE IF EXISTS `AuditLog`;
-DROP TABLE IF EXISTS `ContentTypes`;
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS DropAllProcedures //
+
+CREATE PROCEDURE DropAllProcedures()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE procName VARCHAR(255);
+    DECLARE cur CURSOR FOR 
+        SELECT SPECIFIC_NAME 
+        FROM information_schema.ROUTINES 
+        WHERE ROUTINE_SCHEMA = DATABASE() 
+        AND ROUTINE_TYPE = 'PROCEDURE'
+        AND SPECIFIC_NAME != 'DropAllProcedures';
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    OPEN cur;
+    read_loop: LOOP
+        FETCH NEXT FROM cur INTO procName;
+        
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        SET @drop_proc_sql = CONCAT('DROP PROCEDURE IF EXISTS ', procName);
+        PREPARE stmt FROM @drop_proc_sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END LOOP;
+
+    CLOSE cur;
+END //
+
+CALL DropAllProcedures(); //
+
+CREATE PROCEDURE DropAllTables()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE tableName VARCHAR(255);
+    DECLARE cur CURSOR FOR 
+        SELECT TABLE_NAME 
+        FROM information_schema.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_TYPE = 'BASE TABLE';
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    SET FOREIGN_KEY_CHECKS = 0;
+
+    OPEN cur;
+    read_loop: LOOP
+        FETCH NEXT FROM cur INTO tableName;
+        
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        SET @drop_table_sql = CONCAT('DROP TABLE IF EXISTS ', tableName);
+        PREPARE stmt FROM @drop_table_sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END LOOP;
+
+    CLOSE cur;
+END //
+
+
+CALL DropAllTables(); //
+
+DELIMITER ;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- Core Movies table
@@ -28,7 +85,6 @@ CREATE TABLE Movies (
     title VARCHAR(255) NOT NULL,
     altTitle VARCHAR(255) NULL,
     releaseDate DATE NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     isDupe BOOLEAN DEFAULT false NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -44,7 +100,7 @@ CREATE TABLE MoviesMetadata (
     contentId UUID NOT NULL,
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
-    rgId VARCHAR(64) NULL,
+    rgId VARCHAR(128) NULL,
     title VARCHAR(255) NULL,
     originalTitle VARCHAR(255) NULL,
     description TEXT NULL,
@@ -60,7 +116,6 @@ CREATE TABLE MoviesMetadata (
     cast JSON NULL,
     crew JSON NULL,
     productionCompanies JSON NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
@@ -81,7 +136,6 @@ CREATE TABLE Series (
     releaseDate DATE NULL,
     totalSeasons INT UNSIGNED DEFAULT 0 NULL,
     totalEpisodes INT UNSIGNED DEFAULT 0 NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     isDupe BOOLEAN DEFAULT false NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -97,7 +151,7 @@ CREATE TABLE SeriesMetadata (
     contentId UUID NOT NULL,
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
-    rgId VARCHAR(64) NULL,
+    rgId VARCHAR(128) NULL,
     title VARCHAR(255) NULL,
     originalTitle VARCHAR(255) NULL,
     description TEXT NULL,
@@ -113,7 +167,6 @@ CREATE TABLE SeriesMetadata (
     crew JSON NULL,
     productionCompanies JSON NULL,
     networks JSON NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
@@ -133,7 +186,6 @@ CREATE TABLE Seasons (
     seasonNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
     episodeCount SMALLINT UNSIGNED DEFAULT 0 NULL,
     releaseDate DATE NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
@@ -155,7 +207,6 @@ CREATE TABLE SeasonsMetadata (
     posterPath VARCHAR(255) NULL,
     voteAverage DECIMAL(3,1) NULL,
     voteCount INT UNSIGNED NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
@@ -174,7 +225,6 @@ CREATE TABLE Episodes (
     episodeNumber SMALLINT DEFAULT -1 NOT NULL,
     title VARCHAR(255) NOT NULL,
     releaseDate DATE NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
@@ -191,7 +241,7 @@ CREATE TABLE EpisodesMetadata (
     contentId UUID NOT NULL,
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
-    rgId VARCHAR(64) NULL,
+    rgId VARCHAR(128) NULL,
     title VARCHAR(255) NULL,
     description TEXT NULL,
     episodeNumber SMALLINT DEFAULT -1 NOT NULL,
@@ -201,7 +251,6 @@ CREATE TABLE EpisodesMetadata (
     voteCount INT UNSIGNED NULL,
     posterPath VARCHAR(255) NULL,
     backdropPath VARCHAR(255) NULL,
-    updateHistory JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
@@ -217,6 +266,9 @@ CREATE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
     contentRefId UUID NULL COMMENT 'Reference to Movies.deeplinkRefId',
+    imdbId VARCHAR(20) NULL,
+    tmdbId VARCHAR(20) NULL,
+    rgId VARCHAR(128) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
@@ -235,7 +287,6 @@ CREATE TABLE MoviesDeeplinks (
         "buy": {"SD": 9.99, "HD": 14.99, "UHD": 19.99},
         "rent": {"SD": 3.99, "HD": 4.99, "UHD": 5.99}
     }',
-    updateHistory JSON NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
@@ -251,6 +302,9 @@ CREATE TABLE EpisodesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
     contentRefId UUID NULL COMMENT 'Reference to Episodes.deeplinkRefId',
+    imdbId VARCHAR(20) NULL,
+    tmdbId VARCHAR(20) NULL,
+    rgId VARCHAR(128) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
@@ -269,7 +323,6 @@ CREATE TABLE EpisodesDeeplinks (
         "buy": {"SD": 9.99, "HD": 14.99, "UHD": 19.99},
         "rent": {"SD": 3.99, "HD": 4.99, "UHD": 5.99}
     }',
-    updateHistory JSON NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
@@ -303,7 +356,6 @@ CREATE TABLE Scrapers (
     config JSON NULL,
     schedule JSON NULL,
     supportedTypes JSON NULL COMMENT 'Array of supported content type IDs',
-    updateHistory JSON NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
@@ -335,11 +387,11 @@ CREATE TABLE ScrapersActivity (
 -- Audit Log for tracking all significant changes
 CREATE TABLE AuditLog (
     id BIGINT UNSIGNED AUTO_INCREMENT NOT NULL,
-    entityType VARCHAR(64) NOT NULL,
-    entityId UUID NOT NULL,
-    action ENUM('create', 'update', 'delete', 'restore') NOT NULL,
-    userId VARCHAR(64) NULL,
-    changes JSON NOT NULL,
+    tableName VARCHAR(64) NOT NULL,
+    recordId UUID NOT NULL,
+    action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
+    oldData JSON NULL,
+    newData JSON NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -378,10 +430,16 @@ CREATE INDEX EpisodesDeeplinksSource_IDX USING BTREE ON EpisodesDeeplinks (sourc
 CREATE INDEX ScrapersActivityRun_IDX USING BTREE ON ScrapersActivity (runId);
 CREATE INDEX ScrapersActivityTime_IDX USING BTREE ON ScrapersActivity (startTime);
 
-CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (entityType, entityId);
+CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName, recordId);
 CREATE INDEX AuditLogTime_IDX USING BTREE ON AuditLog (createdAt);
 
 DELIMITER //
+
+-- drop all triggers
+DROP TRIGGER IF EXISTS NewMovies; //
+DROP TRIGGER IF EXISTS NewSeries; //
+DROP TRIGGER IF EXISTS NewSeasons; //
+DROP TRIGGER IF EXISTS NewEpisodes; //
 
 CREATE TRIGGER NewMovies
 AFTER INSERT ON Movies
@@ -434,77 +492,338 @@ BEGIN
 	INSERT INTO EpisodesMetadata (contentId, tmdbId, title, releaseDate, createdAt) VALUES (@contentId, @tmdbId, @title, @releaseDate, NOW());
 END //
 
+-- Audit helper procedures and functions
+-- Central audit logging procedure
+CREATE PROCEDURE DropAllFunctions()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE funcName VARCHAR(255);
+    DECLARE cur CURSOR FOR 
+        SELECT ROUTINE_NAME 
+        FROM information_schema.ROUTINES 
+        WHERE ROUTINE_SCHEMA = DATABASE() 
+        AND ROUTINE_TYPE = 'FUNCTION';
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    OPEN cur;
+    read_loop: LOOP
+        FETCH cur INTO funcName;
+        
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        SET @drop_func_sql = CONCAT('DROP FUNCTION IF EXISTS ', funcName);
+        PREPARE stmt FROM @drop_func_sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END LOOP;
 
--- Triggers for Movies table
+    CLOSE cur;
+END //
+
+CALL DropAllFunctions(); //
+
+CREATE PROCEDURE LogAudit(
+    IN tableName VARCHAR(64),
+    IN recordId UUID,
+    IN actionType ENUM('insert', 'update', 'delete', 'restore'),
+    IN oldData JSON,
+    IN newData JSON
+)
+BEGIN
+    INSERT INTO AuditLog (tableName, recordId, action, oldData, newData)
+    VALUES (tableName, recordId, actionType, oldData, newData);
+END //
+
+-- Helper function for content JSON
+CREATE FUNCTION GetContentJSON(
+    contentId UUID,
+    title VARCHAR(255),
+    tmdbId INT,
+    isActive BOOLEAN
+) RETURNS JSON
+DETERMINISTIC
+BEGIN
+    RETURN JSON_OBJECT(
+        'contentId', contentId,
+        'title', title,
+        'tmdbId', tmdbId,
+        'isActive', isActive
+    );
+END //
+
+-- Helper function for metadata JSON
+CREATE FUNCTION GetMetadataJSON(
+    contentId UUID,
+    title VARCHAR(255),
+    isActive BOOLEAN
+) RETURNS JSON
+DETERMINISTIC
+BEGIN
+    RETURN JSON_OBJECT(
+        'contentId', contentId,
+        'title', title,
+        'isActive', isActive
+    );
+END //
+
+-- Helper function for episode JSON
+CREATE FUNCTION GetEpisodeJSON(
+    contentId UUID,
+    contentRefId UUID,
+    episodeNumber INT,
+    title VARCHAR(255),
+    tmdbId INT,
+    isActive BOOLEAN
+) RETURNS JSON
+DETERMINISTIC
+BEGIN
+    RETURN JSON_OBJECT(
+        'contentId', contentId,
+        'contentRefId', contentRefId,
+        'episodeNumber', episodeNumber,
+        'title', title,
+        'tmdbId', tmdbId,
+        'isActive', isActive
+    );
+END //
+
+-- Helper function for season JSON
+CREATE FUNCTION GetSeasonJSON(
+    contentId UUID,
+    contentRefId UUID,
+    seasonNumber INT,
+    title VARCHAR(255),
+    isActive BOOLEAN
+) RETURNS JSON
+DETERMINISTIC
+BEGIN
+    RETURN JSON_OBJECT(
+        'contentId', contentId,
+        'contentRefId', contentRefId,
+        'seasonNumber', seasonNumber,
+        'title', title,
+        'isActive', isActive
+    );
+END //
+
+-- delete all triggers
+CREATE PROCEDURE DropAllTriggers()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE triggerName VARCHAR(255);
+    DECLARE cur CURSOR FOR 
+        SELECT TRIGGER_NAME 
+        FROM information_schema.TRIGGERS 
+        WHERE TRIGGER_SCHEMA = DATABASE();
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+    read_loop: LOOP
+        FETCH NEXT FROM cur INTO triggerName;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        SET @drop_trigger_sql = CONCAT('DROP TRIGGER IF EXISTS ', triggerName);
+        PREPARE stmt FROM @drop_trigger_sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END LOOP;
+
+    CLOSE cur;
+END //
+
+CALL DropAllTriggers(); //
+
+-- Movies triggers
 CREATE TRIGGER Movies_Audit_Insert AFTER INSERT ON Movies
 FOR EACH ROW
 BEGIN
-    INSERT INTO AuditLog (entityType, entityId, action, changes)
-    VALUES ('Movies', NEW.contentId, 'create',
-        JSON_OBJECT(
-            'contentId', NEW.contentId,
-            'title', NEW.title,
-            'isActive', NEW.isActive
-        )
+    CALL LogAudit('Movies', NEW.contentId, 'insert', NULL, 
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
     );
 END //
 
 CREATE TRIGGER Movies_Audit_Update AFTER UPDATE ON Movies
 FOR EACH ROW
 BEGIN
-    IF OLD.title != NEW.title OR OLD.isActive != NEW.isActive OR OLD.isDupe != NEW.isDupe THEN
-        INSERT INTO AuditLog (entityType, entityId, action, changes)
-        VALUES ('Movies', NEW.contentId, 'update',
-            JSON_OBJECT(
-                'before', JSON_OBJECT(
-                    'title', OLD.title,
-                    'isActive', OLD.isActive,
-                    'isDupe', OLD.isDupe
-                ),
-                'after', JSON_OBJECT(
-                    'title', NEW.title,
-                    'isActive', NEW.isActive,
-                    'isDupe', NEW.isDupe
-                )
-            )
-        );
-    END IF;
+    CALL LogAudit('Movies', NEW.contentId, 'update',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
+    );
 END //
 
--- Triggers for Series table
+CREATE TRIGGER Movies_Audit_Delete AFTER DELETE ON Movies
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Movies', OLD.contentId, 'delete',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        NULL
+    );
+END //
+
+-- MoviesMetadata triggers
+CREATE TRIGGER MoviesMetadata_Audit_Insert AFTER INSERT ON MoviesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('MoviesMetadata', NEW.contentId, 'insert', NULL,
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER MoviesMetadata_Audit_Update AFTER UPDATE ON MoviesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('MoviesMetadata', NEW.contentId, 'update',
+        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER MoviesMetadata_Audit_Delete AFTER DELETE ON MoviesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('MoviesMetadata', OLD.contentId, 'delete',
+        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
+        NULL
+    );
+END //
+
+-- Series triggers
 CREATE TRIGGER Series_Audit_Insert AFTER INSERT ON Series
 FOR EACH ROW
 BEGIN
-    INSERT INTO AuditLog (entityType, entityId, action, changes)
-    VALUES ('Series', NEW.contentId, 'create',
-        JSON_OBJECT(
-            'contentId', NEW.contentId,
-            'title', NEW.title,
-            'isActive', NEW.isActive
-        )
+    CALL LogAudit('Series', NEW.contentId, 'insert', NULL,
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
     );
 END //
 
 CREATE TRIGGER Series_Audit_Update AFTER UPDATE ON Series
 FOR EACH ROW
 BEGIN
-    IF OLD.title != NEW.title OR OLD.isActive != NEW.isActive OR OLD.isDupe != NEW.isDupe THEN
-        INSERT INTO AuditLog (entityType, entityId, action, changes)
-        VALUES ('Series', NEW.contentId, 'update',
-            JSON_OBJECT(
-                'before', JSON_OBJECT(
-                    'title', OLD.title,
-                    'isActive', OLD.isActive,
-                    'isDupe', OLD.isDupe
-                ),
-                'after', JSON_OBJECT(
-                    'title', NEW.title,
-                    'isActive', NEW.isActive,
-                    'isDupe', NEW.isDupe
-                )
-            )
-        );
-    END IF;
+    CALL LogAudit('Series', NEW.contentId, 'update',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER Series_Audit_Delete AFTER DELETE ON Series
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Series', OLD.contentId, 'delete',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        NULL
+    );
+END //
+
+-- SeriesMetadata triggers
+CREATE TRIGGER SeriesMetadata_Audit_Insert AFTER INSERT ON SeriesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('SeriesMetadata', NEW.contentId, 'insert', NULL,
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER SeriesMetadata_Audit_Update AFTER UPDATE ON SeriesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('SeriesMetadata', NEW.contentId, 'update',
+        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER SeriesMetadata_Audit_Delete AFTER DELETE ON SeriesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('SeriesMetadata', OLD.contentId, 'delete',
+        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
+        NULL
+    );
+END //
+
+-- Seasons triggers
+CREATE TRIGGER Seasons_Audit_Insert AFTER INSERT ON Seasons
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Seasons', NEW.contentId, 'insert', NULL,
+        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER Seasons_Audit_Update AFTER UPDATE ON Seasons
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Seasons', NEW.contentId, 'update',
+        GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
+        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER Seasons_Audit_Delete AFTER DELETE ON Seasons
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Seasons', OLD.contentId, 'delete',
+        GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
+        NULL
+    );
+END //
+
+-- Episodes triggers
+CREATE TRIGGER Episodes_Audit_Insert AFTER INSERT ON Episodes
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Episodes', NEW.contentId, 'insert', NULL,
+        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER Episodes_Audit_Update AFTER UPDATE ON Episodes
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Episodes', NEW.contentId, 'update',
+        GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
+        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER Episodes_Audit_Delete AFTER DELETE ON Episodes
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('Episodes', OLD.contentId, 'delete',
+        GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
+        NULL
+    );
+END //
+
+-- EpisodesMetadata triggers
+CREATE TRIGGER EpisodesMetadata_Audit_Insert AFTER INSERT ON EpisodesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('EpisodesMetadata', NEW.contentId, 'insert', NULL,
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER EpisodesMetadata_Audit_Update AFTER UPDATE ON EpisodesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('EpisodesMetadata', NEW.contentId, 'update',
+        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    );
+END //
+
+CREATE TRIGGER EpisodesMetadata_Audit_Delete AFTER DELETE ON EpisodesMetadata
+FOR EACH ROW
+BEGIN
+    CALL LogAudit('EpisodesMetadata', OLD.contentId, 'delete',
+        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
+        NULL
+    );
 END //
 
 -- Create trigger to update Series.seasonContentIds when a new season is added
@@ -546,6 +865,7 @@ END //
 -- Sample data generation procedure
 DROP PROCEDURE IF EXISTS InsertRandomData //
 
+
 CREATE PROCEDURE InsertRandomData()
 BEGIN
     DECLARE i INT DEFAULT 1;
@@ -566,8 +886,8 @@ BEGIN
         SET episode_deeplink_id = UUID();
         
         -- Insert a movie and its related records
-        INSERT INTO Movies (contentId, title, tmdbId)
-        VALUES (movie_content_id, CONCAT('Movie ', i), i+1000);
+        INSERT INTO Movies (contentId, title, tmdbId, isActive)
+        VALUES (movie_content_id, CONCAT('Movie ', i), i+1000, true);
         
         -- Create multiple deeplinks for the same movie with different sources
         INSERT INTO MoviesDeeplinks (contentId, contentRefId, sourceId, sourceType, originSource, region, platformLinks)
@@ -597,6 +917,8 @@ BEGIN
     END WHILE;
 END //
 
+-- DROP PROCEDURE IF EXISTS DropAllProcedures //
+
 DELIMITER ;
 
-CALL InsertRandomData();
+-- CALL InsertRandomData();
