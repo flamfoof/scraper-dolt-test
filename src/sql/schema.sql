@@ -386,15 +386,17 @@ CREATE TABLE ScrapersActivity (
 
 -- Audit Log for tracking all significant changes
 CREATE TABLE AuditLog (
-    id BIGINT UNSIGNED AUTO_INCREMENT NOT NULL,
+    recordId UUID NOT NULL COMMENT 'UUIDv7 format',
     tableName VARCHAR(64) NOT NULL,
-    recordId UUID NOT NULL,
     action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
     oldData JSON NULL,
     newData JSON NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT PRIMARY KEY (id)
+    CONSTRAINT PRIMARY KEY (recordId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Indexes for AuditLog table
+CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName, createdAt);
 
 -- Drop old Deeplinks table
 DROP TABLE IF EXISTS Deeplinks;
@@ -429,9 +431,6 @@ CREATE INDEX EpisodesDeeplinksSource_IDX USING BTREE ON EpisodesDeeplinks (sourc
 
 CREATE INDEX ScrapersActivityRun_IDX USING BTREE ON ScrapersActivity (runId);
 CREATE INDEX ScrapersActivityTime_IDX USING BTREE ON ScrapersActivity (startTime);
-
-CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName, recordId);
-CREATE INDEX AuditLogTime_IDX USING BTREE ON AuditLog (createdAt);
 
 DELIMITER //
 
@@ -532,8 +531,21 @@ CREATE PROCEDURE LogAudit(
     IN newData JSON
 )
 BEGIN
-    INSERT INTO AuditLog (tableName, recordId, action, oldData, newData)
-    VALUES (tableName, recordId, actionType, oldData, newData);
+    INSERT INTO AuditLog (
+        recordId,
+        tableName,
+        action,
+        oldData,
+        newData,
+        createdAt
+    ) VALUES (
+        UUID(),  -- Generate UUIDv7
+        tableName,
+        actionType,
+        oldData,
+        newData,
+        NOW()
+    );
 END //
 
 -- Helper function for content JSON
@@ -917,8 +929,12 @@ BEGIN
     END WHILE;
 END //
 
--- DROP PROCEDURE IF EXISTS DropAllProcedures //
+-- Remove the drop all procedures just to be safe
+DROP PROCEDURE IF EXISTS DropAllProcedures //
+DROP PROCEDURE IF EXISTS DropAllFunctions //
+DROP PROCEDURE IF EXISTS DropAllTriggers //
+DROP PROCEDURE IF EXISTS DropAllTables //
+
+CALL InsertRandomData(); //
 
 DELIMITER ;
-
--- CALL InsertRandomData();
