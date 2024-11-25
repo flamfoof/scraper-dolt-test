@@ -5,6 +5,7 @@ import { config } from "dotenv";
 import { promises as fs } from "fs";
 import { join } from "path";
 import mariadb from "mariadb";
+import inquirer from "inquirer";
 
 config({ path: "./proj.env" });
 let delimiterChar = ";";
@@ -208,6 +209,25 @@ program
 				connection: options.connection
 			});
 
+			// Check if using master connection
+			if (options.connection.toLowerCase() === 'master') {
+				spinner.stop();
+				const { confirm } = await inquirer.prompt([
+					{
+						type: 'confirm',
+						name: 'confirm',
+						message: chalk.yellow('WARNING: You are about to run setup on the MASTER database. This is potentially dangerous. Are you sure you want to continue?'),
+						default: false
+					}
+				]);
+
+				if (!confirm) {
+					console.log(chalk.blue('Setup cancelled by user'));
+					process.exit(0);
+				}
+				spinner.start();
+			}
+
 			// Determine connection configuration based on type
 			const connectionConfig = options.connection.toLowerCase() === 'master' ? {
 				host: process.env.MASTER_DB_HOST,
@@ -227,7 +247,6 @@ program
 				user: connectionConfig.user,
 				port: connectionConfig.port,
 			});
-			
 			const connection = await mariadb.createConnection(connectionConfig);
 
 			debug.log("Setup", "Database connection established");
