@@ -46,19 +46,22 @@ const parseSQLSections = (sql) => {
 
 	for (let i = 0; i < lines.length; i++) {
 		let line = lines[i].trim();
+		let newLine = line
+		// console.log(line)
 		// Skip empty lines and comments
-		if (!line || line.startsWith("--") || line == "") continue;
+		if (!line || line.startsWith("--") || line == "" || line == delimiterChar) continue;
 		
 		if(delimiterChar !== ";"){
 			if(line.startsWith(delimiterChar)){
 				continue
 			} else if (line.endsWith(delimiterChar)){
-				line = line.slice(0, line.length - delimiterChar.length);
+				newLine = line.slice(0, line.length - delimiterChar.length);
 			}
 		}
 
 		// Start new section when creating a table
-		if (line.startsWith("CREATE")) {
+		if(currentSection.sql == ""){
+			if (line.startsWith("CREATE")) {
 			const createMatches = line.match(/CREATE (\w+) ?(?:`(.*)`|(\w+))/);
 			if (createMatches) {
 				const [_, createType, createName1, createName2] = createMatches;
@@ -99,14 +102,13 @@ const parseSQLSections = (sql) => {
 			if (callMatches) {
 				const [_, callType, callName1, callName2] = callMatches;
 				const callName = callName1 || callName2;
-
-				finishSectionParse();
-
-				debug.log("Parser", `Starting new ${callType.toLowerCase()} section: ${callName}`);
-
-				currentSection = { name: `Call ${callName} ${callType}`, sql: "" };
+				if(line.endsWith(delimiterChar)){
+					finishSectionParse();
+					debug.log("Parser", `Starting new ${callType.toLowerCase()} section: ${callName}`);
+					currentSection = { name: `Call ${callName} ${callType}`, sql: "" };
+				}
 			}
-		}
+		}}
 
 		// Start new section for triggers
 		if (line.match(/DELIMITER (.*)/)) {
@@ -115,15 +117,20 @@ const parseSQLSections = (sql) => {
 
 			finishSectionParse();
 
-			currentSection = { name: "Start Delimiter " + delimiterChar, sql: "" , delimiter:delimiterChar};
+			currentSection = { name: "Start Delimiter " + delimiterChar, sql: line , delimiter:delimiterChar};
 
 			debug.log("Parser", "Start Delimiter " + delimiterChar + " section");
+			
+			finishSectionParse();
+
+			currentSection = { name: "Start new", sql: ""};
+
 			continue;
 		}
 
 
 		// Add line to current section
-		currentSection.sql += line + "\n";
+		currentSection.sql += newLine + "\n";
 
 		if (line.endsWith(delimiterChar)) {
 			finishSectionParse();
@@ -137,14 +144,16 @@ const parseSQLSections = (sql) => {
 	}
 
 	debug.log("Parser", `Parsing complete. Total sections: ${sections.length}`);
-	return sections;
 
+	return sections;
+	
 	function finishSectionParse() {
 		if (currentSection.sql) {
 			debug.log(
 				"Parser",
 				`Completed section: ${currentSection.name}`,
-				`SQL length: ${currentSection.sql.length} chars`
+				`SQL length: ${currentSection.sql.length} chars` +
+				`\nSQL: ${currentSection.sql}`
 			);
 			sections.push(Object.assign({}, currentSection));
 			debug.log("Parser", "End Parsing section");
@@ -171,7 +180,7 @@ const executeSQLSection = async (connection, name, sql, spinner) => {
 		}
 
 		spinner.succeed(`Completed ${name}`);
-		debug.log("Executor", `Successfully completed section: ${name}`);
+		// debug.log("Executor", `Successfully completed section: ${name}`);
 	} catch (error) {
 		spinner.fail(`Failed in ${name}`);
 		debug.error("Executor", `Failed executing section: ${name}`, error);
@@ -253,7 +262,7 @@ program
 			console.log('2. Use "bun run diff" to compare schemas');
 			console.log("3. Check logs in mysql/logs/ for detailed operation history");
 		} catch (error) {
-			spinner.fail(`Error: ${error.message}`);
+			// spinner.fail(`Error: ${error.message}`);
 			// debug.error("Setup", "Setup failed", error);
 			// console.error(chalk.red("\nDetailed error:"));
 			// console.error(error);
