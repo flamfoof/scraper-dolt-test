@@ -539,7 +539,7 @@ BEGIN
         newData,
         createdAt
     ) VALUES (
-        UUID(),  -- Generate UUIDv7
+        UUID_v7(),  -- Generate UUIDv7
         tableName,
         actionType,
         oldData,
