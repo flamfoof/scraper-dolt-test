@@ -2,6 +2,42 @@
 CREATE DATABASE IF NOT EXISTS `Tmdb`;
 USE Tmdb;
 
+/*
+Audit Logging System
+-------------------
+The database uses session variables to track the context of changes for audit purposes.
+These variables must be set before performing operations that will be audited.
+
+Required Session Variables:
+- @username VARCHAR(64): The username of the person/system making the change
+- @appContext ENUM: The context in which the change is being made
+    Values: 'scraper', 'admin', 'api', 'system', 'manual'
+- @environment VARCHAR(16): The environment where the change is occurring
+    Values: 'production', 'staging', 'development'
+
+Example Usage:
+-------------
+-- For admin user making changes in production
+SET @username = 'john.doe';
+SET @appContext = 'admin';
+SET @environment = 'production';
+
+-- For scraper running in staging
+SET @username = 'tmdb-scraper';
+SET @appContext = 'scraper';
+SET @environment = 'staging';
+
+-- For system operations
+SET @username = 'system';
+SET @appContext = 'system';
+SET @environment = 'production';
+
+Note: If these variables are not set, the audit system will use default values:
+- username: 'system'
+- appContext: 'system'
+- environment: 'production'
+*/
+
 -- Disable foreign key checks for clean setup
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -393,6 +429,9 @@ CREATE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     tableName VARCHAR(64) NOT NULL,
     action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
+    username VARCHAR(64) NULL COMMENT 'Username of who made the change',
+    appContext ENUM('scraper', 'admin', 'api', 'system', 'manual') NOT NULL DEFAULT 'system',
+    environment VARCHAR(16) NOT NULL DEFAULT 'production' COMMENT 'Environment where change occurred',
     oldData JSON NULL,
     newData JSON NULL,
     CONSTRAINT PRIMARY KEY (id)
@@ -400,6 +439,8 @@ CREATE TABLE AuditLog (
 
 -- Indexes for AuditLog table
 CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
+CREATE INDEX AuditLogUser_IDX USING BTREE ON AuditLog (username);
+CREATE INDEX AuditLogContext_IDX USING BTREE ON AuditLog (appContext, environment);
 
 -- Drop old Deeplinks table
 DROP TABLE IF EXISTS Deeplinks;
@@ -493,54 +534,33 @@ END //
 
 -- Audit helper procedures and functions
 -- Central audit logging procedure
-CREATE PROCEDURE DropAllFunctions()
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE funcName VARCHAR(255);
-    DECLARE cur CURSOR FOR 
-        SELECT ROUTINE_NAME 
-        FROM information_schema.ROUTINES 
-        WHERE ROUTINE_SCHEMA = DATABASE() 
-        AND ROUTINE_TYPE = 'FUNCTION';
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-    
-    OPEN cur;
-    read_loop: LOOP
-        FETCH cur INTO funcName;
-        
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        SET @drop_func_sql = CONCAT('DROP FUNCTION IF EXISTS ', funcName);
-        PREPARE stmt FROM @drop_func_sql;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END LOOP;
-
-    CLOSE cur;
-END //
-
-CALL DropAllFunctions(); //
-
 CREATE PROCEDURE LogAudit(
     IN tableName VARCHAR(64),
     IN recordId UUID,
     IN actionType ENUM('insert', 'update', 'delete', 'restore'),
     IN oldData JSON,
-    IN newData JSON
+    IN newData JSON,
+    IN username VARCHAR(64),
+    IN context ENUM('scraper', 'admin', 'api', 'system', 'manual'),
+    IN env VARCHAR(16)
 )
 BEGIN
     INSERT INTO AuditLog (
         id,
         tableName,
         action,
+        username,
+        appContext,
+        environment,
         oldData,
         newData
     ) VALUES (
-        UUID_v7(),  -- Generate UUIDv7
+        UUID_v7(),
         tableName,
         actionType,
+        IFNULL(username, 'system'),
+        IFNULL(context, 'system'),
+        IFNULL(env, 'production'),
         oldData,
         newData
     );
@@ -648,191 +668,282 @@ END //
 CALL DropAllTriggers(); //
 
 -- Movies triggers
-CREATE TRIGGER Movies_Audit_Insert AFTER INSERT ON Movies
+CREATE TRIGGER Movies_Insert_Audit
+AFTER INSERT ON Movies
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Movies', NEW.contentId, 'insert', NULL, 
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
+    CALL LogAudit('Movies', NEW.contentId, 'insert',
+        NULL,
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Movies_Audit_Update AFTER UPDATE ON Movies
+CREATE TRIGGER Movies_Update_Audit
+AFTER UPDATE ON Movies
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Movies', NEW.contentId, 'update',
         GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Movies_Audit_Delete AFTER DELETE ON Movies
+CREATE TRIGGER Movies_Delete_Audit
+AFTER DELETE ON Movies
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Movies', OLD.contentId, 'delete',
         GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        NULL
+        NULL,
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
 -- MoviesMetadata triggers
-CREATE TRIGGER MoviesMetadata_Audit_Insert AFTER INSERT ON MoviesMetadata
+CREATE TRIGGER MoviesMetadata_Insert_Audit
+AFTER INSERT ON MoviesMetadata
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('MoviesMetadata', NEW.contentId, 'insert', NULL,
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    CALL LogAudit('MoviesMetadata', NEW.contentId, 'insert',
+        NULL,
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER MoviesMetadata_Audit_Update AFTER UPDATE ON MoviesMetadata
+CREATE TRIGGER MoviesMetadata_Update_Audit
+AFTER UPDATE ON MoviesMetadata
 FOR EACH ROW
 BEGIN
     CALL LogAudit('MoviesMetadata', NEW.contentId, 'update',
         GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER MoviesMetadata_Audit_Delete AFTER DELETE ON MoviesMetadata
+CREATE TRIGGER MoviesMetadata_Delete_Audit
+AFTER DELETE ON MoviesMetadata
 FOR EACH ROW
 BEGIN
     CALL LogAudit('MoviesMetadata', OLD.contentId, 'delete',
         GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        NULL
+        NULL,
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
 -- Series triggers
-CREATE TRIGGER Series_Audit_Insert AFTER INSERT ON Series
+CREATE TRIGGER Series_Insert_Audit
+AFTER INSERT ON Series
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Series', NEW.contentId, 'insert', NULL,
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
+    CALL LogAudit('Series', NEW.contentId, 'insert',
+        NULL,
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Series_Audit_Update AFTER UPDATE ON Series
+CREATE TRIGGER Series_Update_Audit
+AFTER UPDATE ON Series
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Series', NEW.contentId, 'update',
         GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive)
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Series_Audit_Delete AFTER DELETE ON Series
+CREATE TRIGGER Series_Delete_Audit
+AFTER DELETE ON Series
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Series', OLD.contentId, 'delete',
         GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        NULL
+        NULL,
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
 -- SeriesMetadata triggers
-CREATE TRIGGER SeriesMetadata_Audit_Insert AFTER INSERT ON SeriesMetadata
+CREATE TRIGGER SeriesMetadata_Insert_Audit
+AFTER INSERT ON SeriesMetadata
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('SeriesMetadata', NEW.contentId, 'insert', NULL,
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    CALL LogAudit('SeriesMetadata', NEW.contentId, 'insert',
+        NULL,
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER SeriesMetadata_Audit_Update AFTER UPDATE ON SeriesMetadata
+CREATE TRIGGER SeriesMetadata_Update_Audit
+AFTER UPDATE ON SeriesMetadata
 FOR EACH ROW
 BEGIN
     CALL LogAudit('SeriesMetadata', NEW.contentId, 'update',
         GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER SeriesMetadata_Audit_Delete AFTER DELETE ON SeriesMetadata
+CREATE TRIGGER SeriesMetadata_Delete_Audit
+AFTER DELETE ON SeriesMetadata
 FOR EACH ROW
 BEGIN
     CALL LogAudit('SeriesMetadata', OLD.contentId, 'delete',
         GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        NULL
+        NULL,
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
 -- Seasons triggers
-CREATE TRIGGER Seasons_Audit_Insert AFTER INSERT ON Seasons
+CREATE TRIGGER Seasons_Insert_Audit
+AFTER INSERT ON Seasons
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Seasons', NEW.contentId, 'insert', NULL,
-        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive)
+    CALL LogAudit('Seasons', NEW.contentId, 'insert',
+        NULL,
+        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Seasons_Audit_Update AFTER UPDATE ON Seasons
+CREATE TRIGGER Seasons_Update_Audit
+AFTER UPDATE ON Seasons
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Seasons', NEW.contentId, 'update',
         GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
-        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive)
+        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Seasons_Audit_Delete AFTER DELETE ON Seasons
+CREATE TRIGGER Seasons_Delete_Audit
+AFTER DELETE ON Seasons
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Seasons', OLD.contentId, 'delete',
         GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
-        NULL
+        NULL,
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
 -- Episodes triggers
-CREATE TRIGGER Episodes_Audit_Insert AFTER INSERT ON Episodes
+CREATE TRIGGER Episodes_Insert_Audit
+AFTER INSERT ON Episodes
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Episodes', NEW.contentId, 'insert', NULL,
-        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive)
+    CALL LogAudit('Episodes', NEW.contentId, 'insert',
+        NULL,
+        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Episodes_Audit_Update AFTER UPDATE ON Episodes
+CREATE TRIGGER Episodes_Update_Audit
+AFTER UPDATE ON Episodes
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Episodes', NEW.contentId, 'update',
         GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
-        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive)
+        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER Episodes_Audit_Delete AFTER DELETE ON Episodes
+CREATE TRIGGER Episodes_Delete_Audit
+AFTER DELETE ON Episodes
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Episodes', OLD.contentId, 'delete',
         GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
-        NULL
+        NULL,
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
 -- EpisodesMetadata triggers
-CREATE TRIGGER EpisodesMetadata_Audit_Insert AFTER INSERT ON EpisodesMetadata
+CREATE TRIGGER EpisodesMetadata_Insert_Audit
+AFTER INSERT ON EpisodesMetadata
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('EpisodesMetadata', NEW.contentId, 'insert', NULL,
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+    CALL LogAudit('EpisodesMetadata', NEW.contentId, 'insert',
+        NULL,
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER EpisodesMetadata_Audit_Update AFTER UPDATE ON EpisodesMetadata
+CREATE TRIGGER EpisodesMetadata_Update_Audit
+AFTER UPDATE ON EpisodesMetadata
 FOR EACH ROW
 BEGIN
     CALL LogAudit('EpisodesMetadata', NEW.contentId, 'update',
         GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive)
+        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
-CREATE TRIGGER EpisodesMetadata_Audit_Delete AFTER DELETE ON EpisodesMetadata
+CREATE TRIGGER EpisodesMetadata_Delete_Audit
+AFTER DELETE ON EpisodesMetadata
 FOR EACH ROW
 BEGIN
     CALL LogAudit('EpisodesMetadata', OLD.contentId, 'delete',
         GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        NULL
+        NULL,
+        @username,
+        @appContext,
+        @environment
     );
 END //
 
