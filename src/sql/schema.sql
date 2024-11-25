@@ -363,20 +363,21 @@ CREATE TABLE Scrapers (
     CONSTRAINT ScrapersAdmin_UK UNIQUE KEY (adminRefId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Scrapers Activity Log
+-- Scrapers Activity Log - optimized with UUIDv7
 CREATE TABLE ScrapersActivity (
-    id BIGINT UNSIGNED AUTO_INCREMENT NOT NULL,
+    id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     scraperId UUID NOT NULL,
     runId UUID NOT NULL,
     contentType TINYINT UNSIGNED NULL,
-    startTime TIMESTAMP NOT NULL,
     endTime TIMESTAMP NULL,
-    itemsProcessed INT UNSIGNED DEFAULT 0,
-    itemsSucceeded INT UNSIGNED DEFAULT 0,
+    stats JSON NULL COMMENT '{
+        "processed": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "skipped": 0
+    }',
     error TEXT NULL,
     metadata JSON NULL,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT ScrapersActivity_FK FOREIGN KEY (scraperId) 
         REFERENCES Scrapers(scraperId) ON DELETE CASCADE,
@@ -384,19 +385,21 @@ CREATE TABLE ScrapersActivity (
         REFERENCES ContentTypes(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Indexes for ScrapersActivity
+CREATE INDEX ScrapersActivityRun_IDX USING BTREE ON ScrapersActivity (runId);
+
 -- Audit Log for tracking all significant changes
 CREATE TABLE AuditLog (
-    recordId UUID NOT NULL COMMENT 'UUIDv7 format',
+    id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     tableName VARCHAR(64) NOT NULL,
     action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
     oldData JSON NULL,
     newData JSON NULL,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT PRIMARY KEY (recordId)
+    CONSTRAINT PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Indexes for AuditLog table
-CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName, createdAt);
+CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
 
 -- Drop old Deeplinks table
 DROP TABLE IF EXISTS Deeplinks;
@@ -428,9 +431,6 @@ CREATE INDEX MoviesDeeplinksSource_IDX USING BTREE ON MoviesDeeplinks (sourceId,
 CREATE INDEX EpisodesDeeplinksContent_IDX USING BTREE ON EpisodesDeeplinks (contentId);
 CREATE UNIQUE INDEX EpisodesDeeplinksRefSource_UK ON EpisodesDeeplinks (contentRefId, sourceId, originSource);
 CREATE INDEX EpisodesDeeplinksSource_IDX USING BTREE ON EpisodesDeeplinks (sourceId, sourceType, region);
-
-CREATE INDEX ScrapersActivityRun_IDX USING BTREE ON ScrapersActivity (runId);
-CREATE INDEX ScrapersActivityTime_IDX USING BTREE ON ScrapersActivity (startTime);
 
 DELIMITER //
 
@@ -532,19 +532,17 @@ CREATE PROCEDURE LogAudit(
 )
 BEGIN
     INSERT INTO AuditLog (
-        recordId,
+        id,
         tableName,
         action,
         oldData,
-        newData,
-        createdAt
+        newData
     ) VALUES (
         UUID_v7(),  -- Generate UUIDv7
         tableName,
         actionType,
         oldData,
-        newData,
-        NOW()
+        newData
     );
 END //
 
