@@ -196,6 +196,7 @@ program
 	.option("--reset", "Reset the database (WARNING: This will delete all data)")
 	.option("--sample-data [count]", "Generate sample data", "1000")
 	.option("--debug", "Enable debug logging")
+	.option("--connection [type]", "Database connection type (local/master)", "local")
 	.action(async (options) => {
 		const spinner = ora("Setting up database").start();
 
@@ -204,22 +205,30 @@ program
 				reset: options.reset,
 				sampleData: options.sampleData,
 				debug: options.debug,
+				connection: options.connection
 			});
 
-			// Create connection
-			debug.log("Setup", "Creating database connection", {
-				host: process.env.LOCAL_DB_HOST,
-				user: process.env.LOCAL_DB_USER,
-				port: process.env.LOCAL_DB_PORT,
-			});
-			
-			const connection = await mariadb.createConnection({
+			// Determine connection configuration based on type
+			const connectionConfig = options.connection.toLowerCase() === 'master' ? {
+				host: process.env.MASTER_DB_HOST,
+				user: process.env.MASTER_DB_USER,
+				password: process.env.MASTER_DB_PASS,
+				port: parseInt(process.env.MASTER_DB_PORT, 10),
+			} : {
 				host: process.env.LOCAL_DB_HOST,
 				user: process.env.LOCAL_DB_USER,
 				password: process.env.LOCAL_DB_PASS,
 				port: parseInt(process.env.LOCAL_DB_PORT, 10),
-				// multipleStatements: true,
+			};
+
+			// Create connection
+			debug.log("Setup", "Creating database connection", {
+				host: connectionConfig.host,
+				user: connectionConfig.user,
+				port: connectionConfig.port,
 			});
+			
+			const connection = await mariadb.createConnection(connectionConfig);
 
 			debug.log("Setup", "Database connection established");
 

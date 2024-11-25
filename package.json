@@ -11,6 +11,8 @@
     "service:uninstall": "bun run src/commands/service.js --uninstall",
     "setup": "bun run src/commands/setup.js",
     "setup:sample": "bun run src/commands/setup.js --sample-data 1000",
+    "setup:master": "bun run src/commands/setup.js --connection master",
+    "setup:local": "bun run src/commands/setup.js --connection local",
     "clone": "bun run src/commands/clone.js",
     "diff": "bun run src/commands/clone-diff.js",
     "test": "bun test"

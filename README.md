@@ -69,15 +69,34 @@ A powerful and efficient MariaDB cloning and management tool optimized for handl
 Initialize the database schema and optionally generate sample data:
 
 ```bash
-# Basic setup
+# Basic setup (uses local database by default)
 bun run setup
 
 # Setup with sample data
 bun run setup --sample-data 1000
 
+# Setup using master database
+bun run setup --connection master
+# or use the shorthand command
+bun run setup:master
+
+# Setup using local database (explicit)
+bun run setup --connection local
+# or use the shorthand command
+bun run setup:local
+
 # Reset database
 bun run setup --reset
+
+# Combine options
+bun run setup --connection master --sample-data 1000 --reset
 ```
+
+The setup command supports the following options:
+- `--connection [type]`: Choose database connection (local/master)
+- `--sample-data [count]`: Generate sample data with specified count
+- `--reset`: Reset the database (WARNING: deletes all data)
+- `--debug`: Enable debug logging
 
 ### Server Management
 
