@@ -633,6 +633,8 @@ BEGIN
     );
 END //
 
+
+
 -- delete all triggers
 CREATE PROCEDURE DropAllTriggers()
 BEGIN
@@ -661,6 +663,7 @@ BEGIN
 END //
 
 CALL DropAllTriggers(); //
+
 
 -- Movies triggers
 CREATE TRIGGER Movies_Insert_Audit
@@ -1033,12 +1036,13 @@ BEGIN
     END WHILE;
 END //
 
+CALL InsertRandomData(); //
+
 -- Remove the drop all procedures just to be safe
 DROP PROCEDURE IF EXISTS DropAllProcedures //
 DROP PROCEDURE IF EXISTS DropAllFunctions //
-DROP PROCEDURE IF EXISTS DropAllTriggers //
+-- DROP PROCEDURE IF EXISTS DropAllTriggers //
 DROP PROCEDURE IF EXISTS DropAllTables //
 
-CALL InsertRandomData(); //
 
 DELIMITER ;
