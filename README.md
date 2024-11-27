@@ -62,6 +62,44 @@ A powerful and efficient MariaDB cloning and management tool optimized for handl
    SSH_FILE=your_ssh_key_file
    ```
 
+## Audit Logging System
+
+The database uses session variables to track the context of changes for audit purposes. These variables must be set before performing operations that will be audited.
+
+### Required Session Variables
+
+- `@username`: The username of the person/system making the change (VARCHAR(64))
+- `@appContext`: The context in which the change is being made
+  - Values: 'scraper', 'admin', 'api', 'system', 'manual'
+- `@environment`: The environment where the change is occurring
+  - Values: 'production', 'staging', 'development'
+
+### Example Usage
+
+```sql
+-- For admin user making changes in production
+SET @username = 'john.doe';
+SET @appContext = 'admin';
+SET @environment = 'production';
+
+-- For scraper running in staging
+SET @username = 'tmdb-scraper';
+SET @appContext = 'scraper';
+SET @environment = 'staging';
+
+-- For system operations
+SET @username = 'system';
+SET @appContext = 'system';
+SET @environment = 'production';
+```
+
+### Default Values
+
+If these variables are not set, the audit system will use these defaults:
+- username: 'system'
+- appContext: 'system'
+- environment: 'production'
+
 ## Usage
 
 ### Database Setup
