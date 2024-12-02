@@ -138,21 +138,36 @@ The setup command supports the following options:
 
 ### Server Management
 
-Choose between running as a service or standalone:
+The application provides different ways to connect to the database:
 
 ```bash
 # Initialize MariaDB
 bun run init
 
+# Create SSH tunnel to remote database
+bun run start
+
 # Run as Windows service (requires admin)
 bun run service
 
-# Run standalone
-bun run start
-
-# Uninstall service
-bun run service:uninstall
 ```
+
+The `start` command will:
+1. Create an SSH tunnel to the remote database server using your SSH key
+2. Forward the specified port (default: 3306) to allow local database access
+3. Open the SSH connection in a new window for easy monitoring
+
+Required environment variables for SSH tunnel:
+```env
+SSH_HOST=your_remote_host    # Remote server hostname/IP
+SSH_USER=your_ssh_user      # SSH username
+SSH_FILE=your_key_file      # SSH key filename (default: google_compute_engine)
+MASTER_DB_PORT=3306         # Port to forward (default: 3306)
+```
+
+Your SSH key should be located in the standard `.ssh` directory:
+- Windows: `C:\Users\<username>\.ssh\`
+- Linux/Mac: `~/.ssh/`
 
 ### Data Management
 
