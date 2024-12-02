@@ -87,27 +87,11 @@ CREATE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     tmdbId VARCHAR(20) NULL,
-    title VARCHAR(255) NOT NULL,
-    altTitle VARCHAR(255) NULL,
-    releaseDate DATE NULL,
-    isActive BOOLEAN DEFAULT true NOT NULL,
-    isDupe BOOLEAN DEFAULT false NOT NULL,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT MoviesUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT MoviesTmdb_UK UNIQUE KEY (tmdbId)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Movies Metadata
-CREATE TABLE MoviesMetadata (
-    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
-    tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
-    title VARCHAR(255) NULL,
+    title VARCHAR(255) NOT NULL,
     originalTitle VARCHAR(255) NULL,
+    altTitle VARCHAR(255) NULL,
     description TEXT NULL,
     runtime INT UNSIGNED NULL COMMENT 'Runtime in minutes',
     releaseDate DATE NULL,
@@ -122,13 +106,12 @@ CREATE TABLE MoviesMetadata (
     crew JSON NULL,
     productionCompanies JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
+    isDupe BOOLEAN DEFAULT false NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT MoviesMetadataUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT MoviesMetadataTmdb_UK UNIQUE KEY (tmdbId),
-    CONSTRAINT MoviesMetadataMovie_FK FOREIGN KEY (contentId) 
-        REFERENCES Movies(contentId) ON DELETE CASCADE
+    CONSTRAINT MoviesUuid_UK UNIQUE KEY (contentId),
+    CONSTRAINT MoviesTmdb_UK UNIQUE KEY (tmdbId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- TV Series table
@@ -136,29 +119,11 @@ CREATE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     tmdbId VARCHAR(20) NULL,
-    title VARCHAR(255) NOT NULL,
-    altTitle VARCHAR(255) NULL,
-    releaseDate DATE NULL,
-    totalSeasons INT UNSIGNED DEFAULT 0 NULL,
-    totalEpisodes INT UNSIGNED DEFAULT 0 NULL,
-    isActive BOOLEAN DEFAULT true NOT NULL,
-    isDupe BOOLEAN DEFAULT false NOT NULL,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT SeriesUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT SeriesTmdb_UK UNIQUE KEY (tmdbId)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Series Metadata
-CREATE TABLE SeriesMetadata (
-    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
-    tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
-    title VARCHAR(255) NULL,
+    title VARCHAR(255) NOT NULL,
     originalTitle VARCHAR(255) NULL,
+    altTitle VARCHAR(255) NULL,
     description TEXT NULL,
     releaseDate DATE NULL,
     posterPath VARCHAR(255) NULL,
@@ -172,14 +137,15 @@ CREATE TABLE SeriesMetadata (
     crew JSON NULL,
     productionCompanies JSON NULL,
     networks JSON NULL,
+    totalSeasons INT UNSIGNED DEFAULT 0 NULL,
+    totalEpisodes INT UNSIGNED DEFAULT 0 NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
+    isDupe BOOLEAN DEFAULT false NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT SeriesMetadataUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT SeriesMetadataTmdb_UK UNIQUE KEY (tmdbId),
-    CONSTRAINT SeriesMetadataSeries_FK FOREIGN KEY (contentId) 
-        REFERENCES Series(contentId) ON DELETE CASCADE
+    CONSTRAINT SeriesUuid_UK UNIQUE KEY (contentId),
+    CONSTRAINT SeriesTmdb_UK UNIQUE KEY (tmdbId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seasons table
@@ -188,9 +154,13 @@ CREATE TABLE Seasons (
     contentId UUID NOT NULL,
     contentRefId UUID NOT NULL,
     title VARCHAR(255) NULL,
+    description TEXT NULL,
     seasonNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
     episodeCount SMALLINT UNSIGNED DEFAULT 0 NULL,
     releaseDate DATE NULL,
+    posterPath VARCHAR(255) NULL,
+    voteAverage DECIMAL(3,1) NULL,
+    voteCount INT UNSIGNED NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
@@ -201,53 +171,15 @@ CREATE TABLE Seasons (
         REFERENCES Series(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Seasons Metadata
-CREATE TABLE SeasonsMetadata (
-    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
-    title VARCHAR(255) NULL,
-    description TEXT NULL,
-    episodeCount SMALLINT UNSIGNED NULL,
-    releaseDate DATE NULL,
-    posterPath VARCHAR(255) NULL,
-    voteAverage DECIMAL(3,1) NULL,
-    voteCount INT UNSIGNED NULL,
-    isActive BOOLEAN DEFAULT true NOT NULL,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT SeasonsMetadataUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT SeasonsMetadataSeason_FK FOREIGN KEY (contentId) 
-        REFERENCES Seasons(contentId) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- Episodes table
 CREATE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     contentRefId UUID NOT NULL,
     tmdbId VARCHAR(20) NULL,
-    episodeNumber SMALLINT DEFAULT -1 NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    releaseDate DATE NULL,
-    isActive BOOLEAN DEFAULT true NOT NULL,
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT EpisodesUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT EpisodesTmdb_UK UNIQUE KEY (tmdbId),
-    CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
-        REFERENCES Seasons(contentId) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Episodes Metadata
-CREATE TABLE EpisodesMetadata (
-    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
-    tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
-    title VARCHAR(255) NULL,
+    title VARCHAR(255) NOT NULL,
     description TEXT NULL,
     episodeNumber SMALLINT DEFAULT -1 NOT NULL,
     runtime SMALLINT UNSIGNED NULL COMMENT 'Runtime in minutes',
@@ -260,10 +192,10 @@ CREATE TABLE EpisodesMetadata (
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT EpisodesMetadataUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT EpisodesMetadataTmdb_UK UNIQUE KEY (tmdbId),
-    CONSTRAINT EpisodesMetadataEpisode_FK FOREIGN KEY (contentId)
-        REFERENCES Episodes(contentId) ON DELETE CASCADE
+    CONSTRAINT EpisodesUuid_UK UNIQUE KEY (contentId),
+    CONSTRAINT EpisodesTmdb_UK UNIQUE KEY (tmdbId),
+    CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
+        REFERENCES Seasons(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movie Deeplinks table for storing platform-specific movie links
@@ -427,13 +359,6 @@ CREATE INDEX SeasonsActive_IDX USING BTREE ON Seasons (isActive);
 CREATE INDEX EpisodesSeason_IDX USING BTREE ON Episodes (contentRefId);
 CREATE INDEX EpisodesActive_IDX USING BTREE ON Episodes (isActive);
 
-CREATE INDEX MoviesMetadataContent_IDX USING BTREE ON MoviesMetadata (contentId);
-CREATE INDEX SeriesMetadataContent_IDX USING BTREE ON SeriesMetadata (contentId);
-CREATE INDEX SeasonsMetadataContent_IDX USING BTREE ON SeasonsMetadata (contentId);
-CREATE INDEX EpisodesMetadataContent_IDX USING BTREE ON EpisodesMetadata (contentId);
-
-CREATE INDEX SeriesMetadataTitle_IDX USING BTREE ON SeriesMetadata (title);
-
 CREATE INDEX MoviesDeeplinksContent_IDX USING BTREE ON MoviesDeeplinks (contentId);
 CREATE UNIQUE INDEX MoviesDeeplinksRefSource_UK ON MoviesDeeplinks (contentRefId, sourceId, originSource);
 CREATE INDEX MoviesDeeplinksSource_IDX USING BTREE ON MoviesDeeplinks (sourceId, sourceType, region);
@@ -476,56 +401,233 @@ END //
 
 CALL DropAllFunctions(); //
 
-CREATE TRIGGER NewMovies
+
+-- delete all triggers
+CREATE PROCEDURE DropAllTriggers()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE triggerName VARCHAR(255);
+    DECLARE cur CURSOR FOR 
+        SELECT TRIGGER_NAME 
+        FROM information_schema.TRIGGERS 
+        WHERE TRIGGER_SCHEMA = DATABASE();
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+    read_loop: LOOP
+        FETCH NEXT FROM cur INTO triggerName;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        SET @drop_trigger_sql = CONCAT('DROP TRIGGER IF EXISTS ', triggerName);
+        PREPARE stmt FROM @drop_trigger_sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END LOOP;
+
+    CLOSE cur;
+END //
+
+CALL DropAllTriggers(); //
+
+
+-- Movies triggers
+CREATE TRIGGER Movies_Insert_Audit
 AFTER INSERT ON Movies
 FOR EACH row
 BEGIN
-	set 
-		@contentId = new.contentId,
-        @tmdbId = new.tmdbId,
-		@title = new.title,
-        @releaseDate = new.releaseDate;
-		
-	INSERT INTO MoviesMetadata (contentId, tmdbId, title, releaseDate, createdAt) VALUES (@contentId, @tmdbId, @title, @releaseDate, NOW());
+    CALL LogAudit('Movies', NEW.contentId, 'insert',
+        NULL,
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
 END //
 
-CREATE TRIGGER NewSeries
+CREATE TRIGGER Movies_Update_Audit
+AFTER UPDATE ON Movies
+FOR EACH row
+BEGIN
+    CALL LogAudit('Movies', NEW.contentId, 'update',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+CREATE TRIGGER Movies_Delete_Audit
+AFTER DELETE ON Movies
+FOR EACH row
+BEGIN
+    CALL LogAudit('Movies', OLD.contentId, 'delete',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        NULL,
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+-- Series triggers
+CREATE TRIGGER Series_Insert_Audit
 AFTER INSERT ON Series
 FOR EACH row
 BEGIN
-	set 
-		@contentId = new.contentId,
-        @tmdbId = new.tmdbId,
-		@title = new.title,
-        @releaseDate = new.releaseDate;
-		
-	INSERT INTO SeriesMetadata (contentId, tmdbId, title, releaseDate, createdAt) VALUES (@contentId, @tmdbId, @title, @releaseDate, NOW());
+    CALL LogAudit('Series', NEW.contentId, 'insert',
+        NULL,
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
 END //
 
-CREATE TRIGGER NewSeasons
+CREATE TRIGGER Series_Update_Audit
+AFTER UPDATE ON Series
+FOR EACH row
+BEGIN
+    CALL LogAudit('Series', NEW.contentId, 'update',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+CREATE TRIGGER Series_Delete_Audit
+AFTER DELETE ON Series
+FOR EACH row
+BEGIN
+    CALL LogAudit('Series', OLD.contentId, 'delete',
+        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
+        NULL,
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+-- Seasons triggers
+CREATE TRIGGER Seasons_Insert_Audit
 AFTER INSERT ON Seasons
 FOR EACH row
 BEGIN
-	set 
-		@contentId = new.contentId,
-		@title = new.title,
-        @releaseDate = new.releaseDate;
-		
-	INSERT INTO SeasonsMetadata (contentId, title, releaseDate, createdAt) VALUES (@contentId, @title, @releaseDate, NOW());
+    CALL LogAudit('Seasons', NEW.contentId, 'insert',
+        NULL,
+        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
 END //
 
-CREATE TRIGGER NewEpisodes
+CREATE TRIGGER Seasons_Update_Audit
+AFTER UPDATE ON Seasons
+FOR EACH row
+BEGIN
+    CALL LogAudit('Seasons', NEW.contentId, 'update',
+        GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
+        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+CREATE TRIGGER Seasons_Delete_Audit
+AFTER DELETE ON Seasons
+FOR EACH row
+BEGIN
+    CALL LogAudit('Seasons', OLD.contentId, 'delete',
+        GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
+        NULL,
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+-- Episodes triggers
+CREATE TRIGGER Episodes_Insert_Audit
 AFTER INSERT ON Episodes
 FOR EACH row
 BEGIN
-	set 
-		@contentId = new.contentId,
-        @tmdbId = new.tmdbId,
-		@title = new.title,
-        @releaseDate = new.releaseDate;
-		
-	INSERT INTO EpisodesMetadata (contentId, tmdbId, title, releaseDate, createdAt) VALUES (@contentId, @tmdbId, @title, @releaseDate, NOW());
+    CALL LogAudit('Episodes', NEW.contentId, 'insert',
+        NULL,
+        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
 END //
+
+CREATE TRIGGER Episodes_Update_Audit
+AFTER UPDATE ON Episodes
+FOR EACH row
+BEGIN
+    CALL LogAudit('Episodes', NEW.contentId, 'update',
+        GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
+        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive),
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+CREATE TRIGGER Episodes_Delete_Audit
+AFTER DELETE ON Episodes
+FOR EACH row
+BEGIN
+    CALL LogAudit('Episodes', OLD.contentId, 'delete',
+        GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
+        NULL,
+        @username,
+        @appContext,
+        @environment
+    );
+END //
+
+-- Create trigger to update Series.seasonContentIds when a new season is added
+CREATE TRIGGER Seasons_Series_Insert AFTER INSERT ON Seasons
+FOR EACH row
+BEGIN
+    UPDATE Series 
+    SET totalSeasons = totalSeasons + 1
+    WHERE contentId = NEW.contentRefId;
+END //
+
+-- Create trigger to update Series.seasonContentIds when a season is deleted
+CREATE TRIGGER Seasons_Series_Delete AFTER DELETE ON Seasons
+FOR EACH row
+BEGIN
+    UPDATE Series 
+    SET totalSeasons = totalSeasons - 1
+    WHERE contentId = OLD.contentRefId;
+END //
+
+-- Create trigger to update Seasons.episodeContentIds when a new episode is added
+CREATE TRIGGER Episodes_Seasons_Insert AFTER INSERT ON Episodes
+FOR EACH row
+BEGIN
+    UPDATE Seasons 
+    SET episodeCount = episodeCount + 1
+    WHERE contentId = NEW.contentRefId;
+END //
+
+-- Create trigger to update Seasons.episodeContentIds when an episode is deleted
+CREATE TRIGGER Episodes_Seasons_Delete AFTER DELETE ON Episodes
+FOR EACH row
+BEGIN
+    UPDATE Seasons 
+    SET episodeCount = episodeCount - 1
+    WHERE contentId = OLD.contentRefId;
+END //
+
 
 -- Audit helper procedures and functions
 -- Central audit logging procedure
@@ -633,354 +735,6 @@ BEGIN
     );
 END //
 
-
-
--- delete all triggers
-CREATE PROCEDURE DropAllTriggers()
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE triggerName VARCHAR(255);
-    DECLARE cur CURSOR FOR 
-        SELECT TRIGGER_NAME 
-        FROM information_schema.TRIGGERS 
-        WHERE TRIGGER_SCHEMA = DATABASE();
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-
-    OPEN cur;
-    read_loop: LOOP
-        FETCH NEXT FROM cur INTO triggerName;
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        SET @drop_trigger_sql = CONCAT('DROP TRIGGER IF EXISTS ', triggerName);
-        PREPARE stmt FROM @drop_trigger_sql;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END LOOP;
-
-    CLOSE cur;
-END //
-
-CALL DropAllTriggers(); //
-
-
--- Movies triggers
-CREATE TRIGGER Movies_Insert_Audit
-AFTER INSERT ON Movies
-FOR EACH row
-BEGIN
-    CALL LogAudit('Movies', NEW.contentId, 'insert',
-        NULL,
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Movies_Update_Audit
-AFTER UPDATE ON Movies
-FOR EACH row
-BEGIN
-    CALL LogAudit('Movies', NEW.contentId, 'update',
-        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Movies_Delete_Audit
-AFTER DELETE ON Movies
-FOR EACH row
-BEGIN
-    CALL LogAudit('Movies', OLD.contentId, 'delete',
-        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        NULL,
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
--- MoviesMetadata triggers
-CREATE TRIGGER MoviesMetadata_Insert_Audit
-AFTER INSERT ON MoviesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('MoviesMetadata', NEW.contentId, 'insert',
-        NULL,
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER MoviesMetadata_Update_Audit
-AFTER UPDATE ON MoviesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('MoviesMetadata', NEW.contentId, 'update',
-        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER MoviesMetadata_Delete_Audit
-AFTER DELETE ON MoviesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('MoviesMetadata', OLD.contentId, 'delete',
-        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        NULL,
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
--- Series triggers
-CREATE TRIGGER Series_Insert_Audit
-AFTER INSERT ON Series
-FOR EACH row
-BEGIN
-    CALL LogAudit('Series', NEW.contentId, 'insert',
-        NULL,
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Series_Update_Audit
-AFTER UPDATE ON Series
-FOR EACH row
-BEGIN
-    CALL LogAudit('Series', NEW.contentId, 'update',
-        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Series_Delete_Audit
-AFTER DELETE ON Series
-FOR EACH row
-BEGIN
-    CALL LogAudit('Series', OLD.contentId, 'delete',
-        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.isActive),
-        NULL,
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
--- SeriesMetadata triggers
-CREATE TRIGGER SeriesMetadata_Insert_Audit
-AFTER INSERT ON SeriesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('SeriesMetadata', NEW.contentId, 'insert',
-        NULL,
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER SeriesMetadata_Update_Audit
-AFTER UPDATE ON SeriesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('SeriesMetadata', NEW.contentId, 'update',
-        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER SeriesMetadata_Delete_Audit
-AFTER DELETE ON SeriesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('SeriesMetadata', OLD.contentId, 'delete',
-        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        NULL,
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
--- Seasons triggers
-CREATE TRIGGER Seasons_Insert_Audit
-AFTER INSERT ON Seasons
-FOR EACH row
-BEGIN
-    CALL LogAudit('Seasons', NEW.contentId, 'insert',
-        NULL,
-        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Seasons_Update_Audit
-AFTER UPDATE ON Seasons
-FOR EACH row
-BEGIN
-    CALL LogAudit('Seasons', NEW.contentId, 'update',
-        GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
-        GetSeasonJSON(NEW.contentId, NEW.contentRefId, NEW.seasonNumber, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Seasons_Delete_Audit
-AFTER DELETE ON Seasons
-FOR EACH row
-BEGIN
-    CALL LogAudit('Seasons', OLD.contentId, 'delete',
-        GetSeasonJSON(OLD.contentId, OLD.contentRefId, OLD.seasonNumber, OLD.title, OLD.isActive),
-        NULL,
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
--- Episodes triggers
-CREATE TRIGGER Episodes_Insert_Audit
-AFTER INSERT ON Episodes
-FOR EACH row
-BEGIN
-    CALL LogAudit('Episodes', NEW.contentId, 'insert',
-        NULL,
-        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Episodes_Update_Audit
-AFTER UPDATE ON Episodes
-FOR EACH row
-BEGIN
-    CALL LogAudit('Episodes', NEW.contentId, 'update',
-        GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
-        GetEpisodeJSON(NEW.contentId, NEW.contentRefId, NEW.episodeNumber, NEW.title, NEW.tmdbId, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER Episodes_Delete_Audit
-AFTER DELETE ON Episodes
-FOR EACH row
-BEGIN
-    CALL LogAudit('Episodes', OLD.contentId, 'delete',
-        GetEpisodeJSON(OLD.contentId, OLD.contentRefId, OLD.episodeNumber, OLD.title, OLD.tmdbId, OLD.isActive),
-        NULL,
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
--- EpisodesMetadata triggers
-CREATE TRIGGER EpisodesMetadata_Insert_Audit
-AFTER INSERT ON EpisodesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('EpisodesMetadata', NEW.contentId, 'insert',
-        NULL,
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER EpisodesMetadata_Update_Audit
-AFTER UPDATE ON EpisodesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('EpisodesMetadata', NEW.contentId, 'update',
-        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        GetMetadataJSON(NEW.contentId, NEW.title, NEW.isActive),
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
-CREATE TRIGGER EpisodesMetadata_Delete_Audit
-AFTER DELETE ON EpisodesMetadata
-FOR EACH row
-BEGIN
-    CALL LogAudit('EpisodesMetadata', OLD.contentId, 'delete',
-        GetMetadataJSON(OLD.contentId, OLD.title, OLD.isActive),
-        NULL,
-        @username,
-        @appContext,
-        @environment
-    );
-END //
-
--- Create trigger to update Series.seasonContentIds when a new season is added
-CREATE TRIGGER Seasons_Series_Insert AFTER INSERT ON Seasons
-FOR EACH row
-BEGIN
-    UPDATE Series 
-    SET totalSeasons = totalSeasons + 1
-    WHERE contentId = NEW.contentRefId;
-END //
-
--- Create trigger to update Series.seasonContentIds when a season is deleted
-CREATE TRIGGER Seasons_Series_Delete AFTER DELETE ON Seasons
-FOR EACH row
-BEGIN
-    UPDATE Series 
-    SET totalSeasons = totalSeasons - 1
-    WHERE contentId = OLD.contentRefId;
-END //
-
--- Create trigger to update Seasons.episodeContentIds when a new episode is added
-CREATE TRIGGER Episodes_Seasons_Insert AFTER INSERT ON Episodes
-FOR EACH row
-BEGIN
-    UPDATE Seasons 
-    SET episodeCount = episodeCount + 1
-    WHERE contentId = NEW.contentRefId;
-END //
-
--- Create trigger to update Seasons.episodeContentIds when an episode is deleted
-CREATE TRIGGER Episodes_Seasons_Delete AFTER DELETE ON Episodes
-FOR EACH row
-BEGIN
-    UPDATE Seasons 
-    SET episodeCount = episodeCount - 1
-    WHERE contentId = OLD.contentRefId;
-END //
-
 -- Sample data generation procedure
 DROP PROCEDURE IF EXISTS InsertRandomData //
 
@@ -1036,6 +790,7 @@ BEGIN
     END WHILE;
 END //
 
+
 CALL InsertRandomData(); //
 
 -- Remove the drop all procedures just to be safe
@@ -1043,6 +798,4 @@ DROP PROCEDURE IF EXISTS DropAllProcedures //
 DROP PROCEDURE IF EXISTS DropAllFunctions //
 -- DROP PROCEDURE IF EXISTS DropAllTriggers //
 DROP PROCEDURE IF EXISTS DropAllTables //
-
-
 DELIMITER ;
