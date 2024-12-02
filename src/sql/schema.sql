@@ -796,6 +796,6 @@ CALL InsertRandomData(); //
 -- Remove the drop all procedures just to be safe
 DROP PROCEDURE IF EXISTS DropAllProcedures //
 DROP PROCEDURE IF EXISTS DropAllFunctions //
--- DROP PROCEDURE IF EXISTS DropAllTriggers //
+DROP PROCEDURE IF EXISTS DropAllTriggers //
 DROP PROCEDURE IF EXISTS DropAllTables //
 DELIMITER ;

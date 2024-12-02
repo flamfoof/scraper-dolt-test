@@ -77,14 +77,6 @@ program
 
       spinner.succeed(chalk.green('SSH tunnel established'));
       console.log(chalk.blue(`SSH tunnel running on port ${localPort}`));
-      
-      // Check if data directory exists and is initialized
-      if (!existsSync(join(process.cwd(), 'mysql', 'data', 'mysql'))) {
-        spinner.text = 'Initializing database files';
-        execSync('mysql_install_db -c mariadb_local.ini -p admin', {
-          stdio: 'inherit'
-        });
-      }
 
       // Handle process termination
       process.on('SIGINT', () => {
