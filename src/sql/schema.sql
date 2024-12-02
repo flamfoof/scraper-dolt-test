@@ -85,7 +85,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- Core Movies table
 CREATE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
+    contentId UUID NOT NULL COMMENT 'UUIDv4 format with title + releaseDate',
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -117,7 +117,7 @@ CREATE TABLE Movies (
 -- TV Series table
 CREATE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
+    contentId UUID NOT NULL COMMENT 'UUIDv4 format with title + releaseDate',,
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -152,7 +152,7 @@ CREATE TABLE Series (
 CREATE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    contentRefId UUID NOT NULL,
+    contentRefId UUID NOT NULL COMMENT 'Reference to Series.contentId',
     title VARCHAR(255) NULL,
     description TEXT NULL,
     seasonNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
@@ -175,7 +175,7 @@ CREATE TABLE Seasons (
 CREATE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    contentRefId UUID NOT NULL,
+    contentRefId UUID NOT NULL COMMENT 'Reference to Seasons.contentId',
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -201,7 +201,7 @@ CREATE TABLE Episodes (
 -- Movie Deeplinks table for storing platform-specific movie links
 CREATE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
+    contentId UUID NOT NULL COMMENT 'UUIDv4',
     contentRefId UUID NULL COMMENT 'Reference to Movies.deeplinkRefId',
     imdbId VARCHAR(20) NULL,
     tmdbId VARCHAR(20) NULL,
