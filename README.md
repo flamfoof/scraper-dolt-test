@@ -111,7 +111,7 @@ Initialize the database schema and optionally generate sample data:
 bun run setup
 
 # Setup with sample data
-bun run setup --sample-data 1000
+bun run setup --sample-data
 
 # Setup using master database
 bun run setup --connection master
@@ -168,6 +168,66 @@ MASTER_DB_PORT=3306         # Port to forward (default: 3306)
 Your SSH key should be located in the standard `.ssh` directory:
 - Windows: `C:\Users\<username>\.ssh\`
 - Linux/Mac: `~/.ssh/`
+
+### Database Cloning
+
+The clone command provides flexible options for database cloning between master and local instances:
+
+```bash
+# Clone from master to local (default)
+node src/commands/clone.js --direction local
+
+# Clone from local to master (requires confirmation)
+node src/commands/clone.js --direction master
+
+# Force clone from local to master (skip confirmation)
+node src/commands/clone.js --direction master --force
+
+# Preview clone operation without making changes
+node src/commands/clone.js --direction local --dry-run
+```
+
+#### Clone Options
+
+- `--direction <direction>`: Specify clone direction (`local` or `master`)
+  - `local`: Clone from master to local (default)
+  - `master`: Clone from local to master (requires confirmation)
+- `--force`: Skip confirmation when cloning to master
+- `--dry-run`: Show what would be cloned without making changes
+- `-d, --database <name>`: Clone specific database (defaults to CLONE_DATABASES from env)
+- `-b, --batch-size <size>`: Set batch size for data transfer (default: 10000)
+
+#### Dry Run Output
+
+The `--dry-run` option provides detailed information about the planned clone operation:
+
+```
+Cloning Plan:
+
+Direction:
+  Master → Local
+
+Source:
+  Host: master.example.com
+  Port: 3306
+
+Destination:
+  Host: localhost
+  Port: 3306
+
+Databases to Clone:
+  database_name:
+    Size: 156.42 MB
+    Tables: 12
+    Tables to clone:
+      - table1 (1,234,567 rows)
+      - table2 (987,654 rows)
+
+Summary:
+  Total Size: 156.42 MB
+  Total Tables: 12
+  Batch Size: 10000 rows
+```
 
 ### Data Management
 

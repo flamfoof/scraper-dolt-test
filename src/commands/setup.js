@@ -195,7 +195,7 @@ program
 	.name("setup")
 	.description("Set up the database schema and initial data")
 	.option("--reset", "Reset the database (WARNING: This will delete all data)")
-	.option("--sample-data [count]", "Generate sample data", "1000")
+	.option("--sample-data", "Run tests.sql to generate sample data")
 	.option("--debug", "Enable debug logging")
 	.option("--connection [type]", "Database connection type (local/master)", "local")
 	.action(async (options) => {
@@ -265,6 +265,18 @@ program
 				await executeSQLSection(connection, section.name, section.sql, spinner);
 			}
 
+			// If sample-data option is enabled, run the tests.sql file
+			if (options.sampleData) {
+				debug.log("Setup", "Running tests.sql for sample data");
+				const testsPath = join(process.cwd(), "src", "sql", "tests.sql");
+				const tests = await fs.readFile(testsPath, "utf8");
+				const testSections = parseSQLSections(tests);
+				
+				for (const section of testSections) {
+					await executeSQLSection(connection, section.name, section.sql, spinner);
+				}
+			}
+
 			// Close connection
 			debug.log("Setup", "Closing database connection");
 			await connection.end();
@@ -281,8 +293,7 @@ program
 
 			if (options.sampleData) {
 				console.log(chalk.blue("Sample data:"));
-				console.log(`• ${options.sampleData} sample movies created`);
-				console.log("• Test scraper configuration added\n");
+				console.log("• Sample data generated from tests.sql\n");
 			}
 
 			console.log(chalk.yellow("Next steps:"));
