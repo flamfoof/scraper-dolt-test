@@ -29,7 +29,7 @@ program
 				const { confirm } = await inquirer.prompt([{
 					type: 'confirm',
 					name: 'confirm',
-					message: 'Are you sure you want to clone from local to master? This will overwrite master data. (y/n)',
+					message: 'Are you sure you want to clone from local to master? This will overwrite master data. (Dangerous) (y/n)',
 					default: false
 				}]);
 
@@ -38,7 +38,7 @@ program
 					process.exit(0);
 				}
 			}
-			
+
 			spinner.start();
 
 			// Source and destination configurations based on direction
