@@ -117,7 +117,8 @@ export class DatabaseManager {
 			"EpisodesDeeplinks",
 
 			// Fourth level dependencies
-			"Prices",
+			"MoviesPrices",
+			"EpisodesPrices",
 
 			// Audit table last (if needed)
 			"AuditLog",
