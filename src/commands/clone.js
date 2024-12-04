@@ -135,14 +135,16 @@ program
 					
 					// Get tables in dependency order and reverse for truncation
 					const tableOrder = destDb.getTableDependencyOrder();
+
+					tables.sort((a, b) => tableOrder.indexOf(a) - tableOrder.indexOf(b));
 					
 					// Truncate destination tables before cloning
 					spinner.text = `Truncating tables in ${database}`;
-					await destDb.truncateInOrder(database, tableOrder);
+					await destDb.truncateInOrder(database, tables);
 					
 					let completedTables = 0;
 
-					for (const table of tableOrder) {
+					for (const table of tables) {
 						spinner.text = `Cloning ${database}: ${table} (${completedTables}/${tables.length})`;
 						if(table === 'AuditLog') {
 							await destDb.truncateInOrder(database, ['AuditLog']);

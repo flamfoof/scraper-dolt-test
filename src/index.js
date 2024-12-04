@@ -10,8 +10,8 @@ program
   .command('init', 'Initialize a new MariaDB instance', { executableFile: 'commands/init.js' })
   .command('start', 'Start the MariaDB server', { executableFile: 'commands/start.js' })
   .command('service', 'Install and manage MariaDB as a Windows service', { executableFile: 'commands/service.js' })
-  .command('clone', 'Clone databases from source to destination', { executableFile: 'commands/clone.js' })
-  .command('diff', 'Compare database schemas', { executableFile: 'commands/clone-diff.js' });
+  .command('clone', 'Clone database', { executableFile: 'commands/clone.js' })
+  .command('scrape', 'Scrape data from sources', { executableFile: 'commands/scrape.js' });
 
 console.log(chalk.cyan('\nMariaDB Management Tools'));
 console.log('========================\n');
@@ -23,7 +23,6 @@ Examples:
   $ bun run start                   # Start MariaDB server directly
   $ bun run service                 # Install and start MariaDB as a service
   $ bun run clone -d database_name  # Clone a specific database
-  $ bun run diff -d database_name   # Compare database schemas
 `);
 
 program.parse();
