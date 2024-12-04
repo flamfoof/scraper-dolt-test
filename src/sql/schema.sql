@@ -85,7 +85,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- Core Movies table
 CREATE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL COMMENT 'UUIDv5 format with title + releaseDate',
+    contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -117,7 +117,7 @@ CREATE TABLE Movies (
 -- TV Series table
 CREATE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL COMMENT 'UUIDv5 format with title + releaseDate',
+    contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -201,8 +201,8 @@ CREATE TABLE Episodes (
 -- Movie Deeplinks table for storing platform-specific movie links
 CREATE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL COMMENT 'UUIDv5',
-    contentRefId UUID NULL COMMENT 'Reference to Movies.deeplinkRefId',
+    contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
+    contentRefId UUID NULL COMMENT 'Reference to Movies.contentId',
     imdbId VARCHAR(20) NULL,
     tmdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -214,16 +214,16 @@ CREATE TABLE MoviesDeeplinks (
     sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
-    platformLinks JSON NULL COMMENT '{
-        "web": "https://example.com/watch/movie-123",
-        "android":"android-app://com.example/watch/movie-123",
-        "ios":"example://watch/movie-123",
-        "androidTv": "android-tv://com.example/watch/movie-123",
-        "fireTv": "amzn://apps/android?asin=B01234567",
-        "lg": "lgwebos://watch/movie-123",
-        "samsung": "samsung-tizen://watch/movie-123",
-        "tvOS": "com.example.tv://watch/movie-123"
-    }',
+    -- Platform specific links
+    webLink VARCHAR(512) NULL COMMENT 'Web browser URL',
+    androidLink VARCHAR(512) NULL COMMENT 'Android mobile app deep link',
+    iosLink VARCHAR(512) NULL COMMENT 'iOS mobile app deep link',
+    androidTvLink VARCHAR(512) NULL COMMENT 'Android TV app deep link',
+    fireTvLink VARCHAR(512) NULL COMMENT 'Amazon Fire TV app deep link',
+    lgLink VARCHAR(512) NULL COMMENT 'LG WebOS TV app deep link',
+    samsungLink VARCHAR(512) NULL COMMENT 'Samsung Tizen TV app deep link',
+    tvOSLink VARCHAR(512) NULL COMMENT 'Apple TV app deep link',
+    rokuLink VARCHAR(512) NULL COMMENT 'Roku app deep link',
     pricing JSON NULL COMMENT '{
         "buy": {"SD": 9.99, "HD": 14.99, "UHD": 19.99},
         "rent": {"SD": 3.99, "HD": 4.99, "UHD": 5.99}
@@ -241,8 +241,8 @@ CREATE TABLE MoviesDeeplinks (
 -- Episode Deeplinks table for storing platform-specific episode links
 CREATE TABLE EpisodesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
-    contentRefId UUID NULL COMMENT 'Reference to Episodes.deeplinkRefId',
+    contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
+    contentRefId UUID NULL COMMENT 'Reference to Episodes.contentId',
     imdbId VARCHAR(20) NULL,
     tmdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -254,16 +254,16 @@ CREATE TABLE EpisodesDeeplinks (
     sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
-    platformLinks JSON NULL COMMENT '{
-        "web": "https://example.com/watch/episode-123",
-        "android":"android-app://com.example/watch/episode-123",
-        "ios":"example://watch/episode-123",
-        "androidTv": "android-tv://com.example/watch/episode-123",
-        "fireTv": "amzn://apps/android?asin=B01234567",
-        "lg": "lgwebos://watch/episode-123",
-        "samsung": "samsung-tizen://watch/episode-123",
-        "tvOS": "com.example.tv://watch/episode-123"
-    }',
+    -- Platform specific links
+    webLink VARCHAR(512) NULL COMMENT 'Web browser URL',
+    androidLink VARCHAR(512) NULL COMMENT 'Android mobile app deep link',
+    iosLink VARCHAR(512) NULL COMMENT 'iOS mobile app deep link',
+    androidTvLink VARCHAR(512) NULL COMMENT 'Android TV app deep link',
+    fireTvLink VARCHAR(512) NULL COMMENT 'Amazon Fire TV app deep link',
+    lgLink VARCHAR(512) NULL COMMENT 'LG WebOS TV app deep link',
+    samsungLink VARCHAR(512) NULL COMMENT 'Samsung Tizen TV app deep link',
+    tvOSLink VARCHAR(512) NULL COMMENT 'Apple TV app deep link',
+    rokuLink VARCHAR(512) NULL COMMENT 'Roku app deep link',
     pricing JSON NULL COMMENT '{
         "buy": {"SD": 9.99, "HD": 14.99, "UHD": 19.99},
         "rent": {"SD": 3.99, "HD": 4.99, "UHD": 5.99}
