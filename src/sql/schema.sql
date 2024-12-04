@@ -2,11 +2,6 @@
 CREATE DATABASE IF NOT EXISTS `Tmdb`;
 USE Tmdb;
 
--- Initialize audit logging session variables
-SET @username = 'system';
-SET @appContext = 'system';
-SET @environment = 'dev';
-
 -- Disable foreign key checks for clean setup
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -343,61 +338,6 @@ CREATE TABLE EpisodesPrices (
         REFERENCES EpisodesDeeplinks (contentId)
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Base content type enum
-CREATE TABLE ContentTypes (
-    id TINYINT UNSIGNED PRIMARY KEY,
-    name VARCHAR(16) NOT NULL UNIQUE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT INTO ContentTypes (id, name) VALUES 
-(1, 'movie'),
-(2, 'series'),
-(3, 'season'),
-(4, 'episode');
-
--- Scrapers Configuration
-CREATE TABLE Scrapers (
-    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    scraperId UUID NOT NULL,
-    adminRefId SMALLINT UNSIGNED NULL,
-    sourceSlug VARCHAR(64) NOT NULL,
-    title VARCHAR(128) NOT NULL,
-    scraperSrcTitle VARCHAR(128) NOT NULL,
-    config JSON NULL,
-    schedule JSON NULL,
-    supportedTypes JSON NULL COMMENT 'Array of supported content type IDs',
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT ScrapersUuid_UK UNIQUE KEY (scraperId),
-    CONSTRAINT ScrapersAdmin_UK UNIQUE KEY (adminRefId)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Scrapers Activity Log - optimized with UUIDv7
-CREATE TABLE ScrapersActivity (
-    id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    scraperId UUID NOT NULL,
-    runId UUID NOT NULL,
-    contentType TINYINT UNSIGNED NULL,
-    endTime TIMESTAMP NULL,
-    stats JSON NULL COMMENT '{
-        "processed": 0,
-        "succeeded": 0,
-        "failed": 0,
-        "skipped": 0
-    }',
-    error TEXT NULL,
-    metadata JSON NULL,
-    CONSTRAINT PRIMARY KEY (id),
-    CONSTRAINT ScrapersActivity_FK FOREIGN KEY (scraperId) 
-        REFERENCES Scrapers(scraperId) ON DELETE CASCADE,
-    CONSTRAINT ScrapersActivityType_FK FOREIGN KEY (contentType)
-        REFERENCES ContentTypes(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Indexes for ScrapersActivity
-CREATE INDEX ScrapersActivityRun_IDX USING BTREE ON ScrapersActivity (runId);
 
 -- Audit Log for tracking all significant changes
 CREATE TABLE AuditLog (

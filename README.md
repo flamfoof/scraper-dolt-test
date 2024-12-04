@@ -301,12 +301,11 @@ Logs are stored in:
 ```
 src/
 ├── commands/          # CLI commands
-│   ├── init.js       # Database initialization
-│   ├── service.js    # Service management
-│   ├── start.js      # Direct server startup
-│   ├── setup.js      # Schema setup
-│   ├── clone.js      # Database cloning
-│   └── clone-diff.js # Schema comparison
+│   ├── clone.js     # Database cloning
+│   ├── init.js      # Database initialization
+│   ├── scrape.js    # Data scraping
+│   ├── service.js   # Service management
+│   └── start.js     # Server startup
 ├── lib/              # Core functionality
 │   └── db-manager.js # Database operations
 ├── sql/              # SQL definitions
