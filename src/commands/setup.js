@@ -235,6 +235,7 @@ program
 					process.exit(0);
 				}
 				spinner.start();
+				env = process.env.ENV_PROD;
 			}
 
 			// Determine connection configuration based on type
@@ -274,13 +275,6 @@ program
 			//set up initial data
 			for (const section of sections) {
 				await executeSQLSection(dbManager, section.name, section.sql, spinner);
-			}
-
-			const databaseList = await dbManager.getDatabases();
-			for (const database of databaseList) {
-				console.log(chalk.blue(`Database: ${database}`));
-				await dbManager.executeQuery(`use ${database};
-					`);
 			}
 
 			// If sample-data option is enabled, run the tests.sql file

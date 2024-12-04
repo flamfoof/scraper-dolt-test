@@ -1,3 +1,5 @@
+use Tmdb;
+
 DELIMITER //
 
 -- Sample data generation procedure
@@ -120,7 +122,7 @@ BEGIN
         VALUES (episode_content_id, season_content_id, 1, CONCAT('Episode ', i), i+1000);
         
         -- Create multiple deeplinks for the same episode with different sources
-        INSERT INTO EpisodesDeeplinks (
+        INSERT INTO SeriesDeeplinks (
             contentId, 
             contentRefId, 
             sourceId, 
@@ -174,7 +176,7 @@ BEGIN
             );
         
         -- Insert prices for episodes and series
-        INSERT INTO EpisodesPrices (
+        INSERT INTO SeriesPrices (
             contentId,
             contentRefId,
             region,
@@ -233,5 +235,165 @@ BEGIN
 END //
 
 CALL InsertRandomData(); //
+
+DELIMITER ;
+
+
+
+-- Switch to Scrapers database for test data generation
+USE Scrapers;
+
+DELIMITER //
+
+-- Sample scraper data generation procedure
+DROP PROCEDURE IF EXISTS InsertScraperTestData //
+
+CREATE PROCEDURE InsertScraperTestData()
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE scraper_id UUID;
+    DECLARE run_id UUID;
+    
+    WHILE i < 5 DO
+        -- Generate UUIDs
+        SET scraper_id = UUID();
+        
+        -- Insert scraper configuration
+        INSERT INTO Scrapers (
+            scraperId,
+            adminRefId,
+            sourceSlug,
+            title,
+            scraperSrcTitle,
+            config,
+            schedule
+        )
+        VALUES (
+            scraper_id,
+            i,
+            CONCAT('source-', i),
+            CONCAT('Scraper ', i),
+            CONCAT('Admin Scraper ', i),
+            JSON_OBJECT(
+                'baseUrl', CONCAT('https://api.source-', i, '.com'),
+                'apiKey', CONCAT('key-', i),
+                'rateLimit', 100,
+                'timeout', 30000
+            ),
+            JSON_OBJECT(
+                'frequency', 'daily',
+                'startTime', '00:00',
+                'endTime', '06:00',
+                'daysOfWeek', JSON_ARRAY('MON', 'WED', 'FRI')
+            )
+        );
+        
+        -- Insert multiple activity records for each scraper
+        SET i = i + 1;
+        
+        -- Completed run
+        SET run_id = UUID();
+        INSERT INTO ScrapersActivity (
+            id,
+            scraperRefId,
+            runId,
+            contentType,
+            startTime,
+            endTime,
+            status,
+            totalItems,
+            processedItems,
+            errorItems,
+            metadata
+        )
+        VALUES (
+            UUID_v7(),
+            scraper_id,
+            run_id,
+            'movies',
+            DATE_SUB(NOW(), INTERVAL i DAY),
+            DATE_SUB(NOW(), INTERVAL i-1 DAY),
+            'completed',
+            1000,
+            1000,
+            0,
+            JSON_OBJECT(
+                'duration', '5h 30m',
+                'avgProcessingTime', '19.8s',
+                'peakMemoryUsage', '256MB'
+            )
+        );
+        
+        -- Failed run
+        SET run_id = UUID();
+        INSERT INTO ScrapersActivity (
+            id,
+            scraperRefId,
+            runId,
+            contentType,
+            startTime,
+            endTime,
+            status,
+            totalItems,
+            processedItems,
+            errorItems,
+            error,
+            metadata
+        )
+        VALUES (
+            UUID_v7(),
+            scraper_id,
+            run_id,
+            'series',
+            DATE_SUB(NOW(), INTERVAL i+1 DAY),
+            DATE_SUB(NOW(), INTERVAL i DAY),
+            'failed',
+            500,
+            250,
+            250,
+            'API rate limit exceeded',
+            JSON_OBJECT(
+                'duration', '2h 15m',
+                'avgProcessingTime', '32.4s',
+                'peakMemoryUsage', '512MB',
+                'lastProcessedItem', 'series-250'
+            )
+        );
+        
+        -- Currently running
+        SET run_id = UUID();
+        INSERT INTO ScrapersActivity (
+            id,
+            scraperRefId,
+            runId,
+            contentType,
+            startTime,
+            status,
+            totalItems,
+            processedItems,
+            errorItems,
+            metadata
+        )
+        VALUES (
+            UUID_v7(),
+            scraper_id,
+            run_id,
+            'movies',
+            NOW(),
+            'running',
+            2000,
+            500,
+            10,
+            JSON_OBJECT(
+                'currentItem', 'movie-501',
+                'avgProcessingTime', '25.6s',
+                'peakMemoryUsage', '384MB'
+            )
+        );
+    END WHILE;
+END //
+
+-- Call the procedure to generate test data
+CALL InsertScraperTestData() //
 
 DELIMITER ;
