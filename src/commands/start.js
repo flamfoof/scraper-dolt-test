@@ -31,7 +31,7 @@ const getSSHKeyPath = () => {
 		throw new Error(`SSH key not found at: ${keyPath}`);
 	}
 
-	return keyPath;
+	return `"${keyPath}"`;
 };
 
 program
