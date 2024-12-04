@@ -215,19 +215,15 @@ CREATE TABLE MoviesDeeplinks (
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     -- Platform specific links
-    webLink VARCHAR(512) NULL COMMENT 'Web browser URL',
-    androidLink VARCHAR(512) NULL COMMENT 'Android mobile app deep link',
-    iosLink VARCHAR(512) NULL COMMENT 'iOS mobile app deep link',
-    androidTvLink VARCHAR(512) NULL COMMENT 'Android TV app deep link',
-    fireTvLink VARCHAR(512) NULL COMMENT 'Amazon Fire TV app deep link',
-    lgLink VARCHAR(512) NULL COMMENT 'LG WebOS TV app deep link',
-    samsungLink VARCHAR(512) NULL COMMENT 'Samsung Tizen TV app deep link',
-    tvOSLink VARCHAR(512) NULL COMMENT 'Apple TV app deep link',
-    rokuLink VARCHAR(512) NULL COMMENT 'Roku app deep link',
-    pricing JSON NULL COMMENT '{
-        "buy": {"SD": 9.99, "HD": 14.99, "UHD": 19.99},
-        "rent": {"SD": 3.99, "HD": 4.99, "UHD": 5.99}
-    }',
+    web VARCHAR(512) NULL COMMENT 'Web browser URL',
+    android VARCHAR(512) NULL COMMENT 'Android mobile app deep link',
+    iOS VARCHAR(512) NULL COMMENT 'iOS mobile app deep link',
+    androidTv VARCHAR(512) NULL COMMENT 'Android TV app deep link',
+    fireTv VARCHAR(512) NULL COMMENT 'Amazon Fire TV app deep link',
+    lg VARCHAR(512) NULL COMMENT 'LG WebOS TV app deep link',
+    samsung VARCHAR(512) NULL COMMENT 'Samsung Tizen TV app deep link',
+    tvOS VARCHAR(512) NULL COMMENT 'Apple TV app deep link',
+    roku VARCHAR(512) NULL COMMENT 'Roku app deep link',
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
@@ -255,19 +251,15 @@ CREATE TABLE EpisodesDeeplinks (
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     -- Platform specific links
-    webLink VARCHAR(512) NULL COMMENT 'Web browser URL',
-    androidLink VARCHAR(512) NULL COMMENT 'Android mobile app deep link',
-    iosLink VARCHAR(512) NULL COMMENT 'iOS mobile app deep link',
-    androidTvLink VARCHAR(512) NULL COMMENT 'Android TV app deep link',
-    fireTvLink VARCHAR(512) NULL COMMENT 'Amazon Fire TV app deep link',
-    lgLink VARCHAR(512) NULL COMMENT 'LG WebOS TV app deep link',
-    samsungLink VARCHAR(512) NULL COMMENT 'Samsung Tizen TV app deep link',
-    tvOSLink VARCHAR(512) NULL COMMENT 'Apple TV app deep link',
-    rokuLink VARCHAR(512) NULL COMMENT 'Roku app deep link',
-    pricing JSON NULL COMMENT '{
-        "buy": {"SD": 9.99, "HD": 14.99, "UHD": 19.99},
-        "rent": {"SD": 3.99, "HD": 4.99, "UHD": 5.99}
-    }',
+    web VARCHAR(512) NULL COMMENT 'Web browser URL',
+    android VARCHAR(512) NULL COMMENT 'Android mobile app deep link',
+    iOS VARCHAR(512) NULL COMMENT 'iOS mobile app deep link',
+    androidTv VARCHAR(512) NULL COMMENT 'Android TV app deep link',
+    fireTv VARCHAR(512) NULL COMMENT 'Amazon Fire TV app deep link',
+    lg VARCHAR(512) NULL COMMENT 'LG WebOS TV app deep link',
+    samsung VARCHAR(512) NULL COMMENT 'Samsung Tizen TV app deep link',
+    tvOS VARCHAR(512) NULL COMMENT 'Apple TV app deep link',
+    roku VARCHAR(512) NULL COMMENT 'Roku app deep link',
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
@@ -276,6 +268,80 @@ CREATE TABLE EpisodesDeeplinks (
     CONSTRAINT EpisodesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
     CONSTRAINT EpisodesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
         REFERENCES Episodes(contentId) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Movies Prices table for storing movie pricing information
+CREATE TABLE MoviesPrices (
+    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
+    contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
+    contentRefId UUID NULL COMMENT 'Reference to MoviesDeeplinks.contentId',
+    region VARCHAR(10) NULL,
+    -- Buy prices of movies
+    buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of movies',
+    buyHD DECIMAL(10,2) NULL COMMENT 'HD quality purchase price of movies',
+    buyUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality purchase price of movies',
+    -- Rental prices of movies
+    rentSD DECIMAL(10,2) NULL COMMENT 'SD quality rental price of movies',
+    rentHD DECIMAL(10,2) NULL COMMENT 'HD quality rental price of movies',
+    rentUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality rental price of movies',
+    -- Metadata
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    isActive BOOLEAN DEFAULT true NOT NULL,
+    PRIMARY KEY (id),
+    INDEX idx_content_id (contentId),
+    INDEX idx_content_ref_id (contentRefId),
+    INDEX idx_region (region),
+    CONSTRAINT MoviesPricesContent_UK UNIQUE KEY (contentRefId, region),
+    CONSTRAINT MoviesPricesDeeplinks_FK
+        FOREIGN KEY (contentRefId)
+        REFERENCES MoviesDeeplinks (contentId)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Episodes Prices table for storing TV content pricing information
+CREATE TABLE EpisodesPrices (
+    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
+    contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
+    contentRefId UUID NULL COMMENT 'Reference to EpisodesDeeplinks.contentId',
+    region VARCHAR(10) NULL,
+    -- Buy prices of episodes
+    buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of episodes',
+    buyHD DECIMAL(10,2) NULL COMMENT 'HD quality purchase price of episodes',
+    buyUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality purchase price of episodes',
+    -- Rental prices of episodes
+    rentSD DECIMAL(10,2) NULL COMMENT 'SD quality rental price of episodes',
+    rentHD DECIMAL(10,2) NULL COMMENT 'HD quality rental price of episodes',
+    rentUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality rental price of episodes',
+    -- Series buy prices
+    seriesBuySD DECIMAL(10,2) NULL COMMENT 'SD quality series purchase price',
+    seriesBuyHD DECIMAL(10,2) NULL COMMENT 'HD quality series purchase price',
+    seriesBuyUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality series purchase price',
+    -- Series rental prices
+    seriesRentSD DECIMAL(10,2) NULL COMMENT 'SD quality series rental price',
+    seriesRentHD DECIMAL(10,2) NULL COMMENT 'HD quality series rental price',
+    seriesRentUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality series rental price',
+    -- Season buy prices
+    seasonBuySD DECIMAL(10,2) NULL COMMENT 'SD quality season purchase price',
+    seasonBuyHD DECIMAL(10,2) NULL COMMENT 'HD quality season purchase price',
+    seasonBuyUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality season purchase price',
+    -- Season rental prices
+    seasonRentSD DECIMAL(10,2) NULL COMMENT 'SD quality season rental price',
+    seasonRentHD DECIMAL(10,2) NULL COMMENT 'HD quality season rental price',
+    seasonRentUHD DECIMAL(10,2) NULL COMMENT 'UHD/4K quality season rental price',
+    -- Metadata
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+    isActive BOOLEAN DEFAULT true NOT NULL,
+    PRIMARY KEY (id),
+    INDEX idx_content_id (contentId),
+    INDEX idx_content_ref_id (contentRefId),
+    INDEX idx_region (region),
+    CONSTRAINT EpisodesPricesContent_UK UNIQUE KEY (contentRefId, region),
+    CONSTRAINT EpisodesPricesDeeplinks_FK
+        FOREIGN KEY (contentRefId)
+        REFERENCES EpisodesDeeplinks (contentId)
+        ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Base content type enum

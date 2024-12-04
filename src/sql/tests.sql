@@ -34,15 +34,15 @@ BEGIN
             sourceType, 
             originSource, 
             region,
-            webLink,
-            androidLink,
-            iosLink,
-            androidTvLink,
-            fireTvLink,
-            lgLink,
-            samsungLink,
-            tvOSLink,
-            rokuLink
+            web,
+            android,
+            iOS,
+            androidTv,
+            fireTv,
+            lg,
+            samsung,
+            tvOS,
+            roku
         )
         VALUES 
             (
@@ -80,6 +80,33 @@ BEGIN
                 'https://fidney.com/watch/movie-123'
             );
         
+        -- Insert prices for movies
+        INSERT INTO MoviesPrices (
+            contentId,
+            contentRefId,
+            region,
+            -- Buy prices
+            buySD,
+            buyHD,
+            buyUHD,
+            -- Rental prices
+            rentSD,
+            rentHD,
+            rentUHD
+        )
+        VALUES 
+            (
+                UUID(),
+                movie_deeplink_id,
+                'US',
+                9.99,  -- buySD
+                14.99, -- buyHD
+                19.99, -- buyUHD
+                3.99,  -- rentSD
+                4.99,  -- rentHD
+                5.99   -- rentUHD
+            );
+        
         -- Insert a series and its related records
         INSERT INTO Series (contentId, title, tmdbId)
         VALUES (series_content_id, CONCAT('TV Series ', i), i+1000);
@@ -100,15 +127,15 @@ BEGIN
             sourceType, 
             originSource, 
             region,
-            webLink,
-            androidLink,
-            iosLink,
-            androidTvLink,
-            fireTvLink,
-            lgLink,
-            samsungLink,
-            tvOSLink,
-            rokuLink
+            web,
+            android,
+            iOS,
+            androidTv,
+            fireTv,
+            lg,
+            samsung,
+            tvOS,
+            roku
         )
         VALUES 
             (
@@ -144,6 +171,61 @@ BEGIN
                 'samsung-tizen://watch/episode-123',
                 'com.fidney.tv://watch/episode-123',
                 'https://fidney.com/watch/episode-123'
+            );
+        
+        -- Insert prices for episodes and series
+        INSERT INTO EpisodesPrices (
+            contentId,
+            contentRefId,
+            region,
+            -- Buy prices
+            buySD,
+            buyHD,
+            buyUHD,
+            -- Rental prices
+            rentSD,
+            rentHD,
+            rentUHD,
+            -- Series buy prices
+            seriesBuySD,
+            seriesBuyHD,
+            seriesBuyUHD,
+            -- Series rental prices
+            seriesRentSD,
+            seriesRentHD,
+            seriesRentUHD,
+            -- Season buy prices
+            seasonBuySD,
+            seasonBuyHD,
+            seasonBuyUHD,
+            -- Season rental prices
+            seasonRentSD,
+            seasonRentHD,
+            seasonRentUHD
+        )
+        VALUES 
+            (
+                UUID(),
+                episode_deeplink_id,
+                'US',
+                1.99,   -- buySD (episode)
+                2.99,   -- buyHD (episode)
+                3.99,   -- buyUHD (episode)
+                0.99,   -- rentSD (episode)
+                1.99,   -- rentHD (episode)
+                2.99,   -- rentUHD (episode)
+                29.99,  -- seriesBuySD
+                39.99,  -- seriesBuyHD
+                49.99,  -- seriesBuyUHD
+                19.99,  -- seriesRentSD
+                24.99,  -- seriesRentHD
+                29.99,  -- seriesRentUHD
+                14.99,  -- seasonBuySD
+                19.99,  -- seasonBuyHD
+                24.99,  -- seasonBuyUHD
+                9.99,   -- seasonRentSD
+                14.99,  -- seasonRentHD
+                19.99   -- seasonRentUHD
             );
         
         SET i = i + 1;
