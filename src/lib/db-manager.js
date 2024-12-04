@@ -25,11 +25,16 @@ export class DatabaseManager {
 			concurrency: this.config.connectionLimit,
 			autoStart: true,
 		});
+
+		this.connection = null;
 	}
 
 	async connect() {
 		try {
 			const conn = await this.pool.getConnection();
+			this.connection = await mariadb.createConnection({
+				...this.config
+			})
 			conn.release();
 			return true;
 		} catch (error) {
@@ -38,6 +43,7 @@ export class DatabaseManager {
 	}
 
 	async disconnect() {
+		await this.connection.end();
 		await this.pool.end();
 	}
 
@@ -50,6 +56,18 @@ export class DatabaseManager {
 				return rows;
 			} finally {
 				if (conn) conn.release();
+			}
+		});
+	}
+
+	async executeQueryContinuously(query, params = []) {
+		return this.queue.add(async () => {
+			let conn;
+			try {
+				conn = await this.connection;
+				const rows = await conn.query(query, params);
+				return rows;
+			} finally {
 			}
 		});
 	}
