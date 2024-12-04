@@ -235,7 +235,6 @@ program
 					process.exit(0);
 				}
 				spinner.start();
-				env = process.env.ENV_PROD;
 			}
 
 			// Determine connection configuration based on type
