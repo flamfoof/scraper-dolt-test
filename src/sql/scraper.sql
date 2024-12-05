@@ -111,6 +111,48 @@ BEGIN
     RETURN result;
 END //
 
+-- Function to get only changed fields between two JSON objects
+CREATE FUNCTION GetChangedFieldsJSON(old_json JSON, new_json JSON)
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE result, keys_array TEXT;
+    DECLARE i INT;
+    DECLARE current_key TEXT;
+    DECLARE old_value, new_value TEXT;
+    
+    SET result = '{}';
+    SET keys_array = JSON_KEYS(new_json);
+    SET i = 0;
+    
+    WHILE i < JSON_LENGTH(keys_array) DO
+        SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
+        SET old_value = JSON_EXTRACT(old_json, CONCAT('$.', current_key));
+        SET new_value = JSON_EXTRACT(new_json, CONCAT('$.', current_key));
+        
+        -- Unquote the values for comparison if they're not NULL
+        IF old_value IS NOT NULL THEN
+            SET old_value = JSON_UNQUOTE(old_value);
+        END IF;
+        IF new_value IS NOT NULL THEN
+            SET new_value = JSON_UNQUOTE(new_value);
+        END IF;
+        
+        IF (old_value IS NULL AND new_value IS NOT NULL) OR 
+           (old_value IS NOT NULL AND new_value IS NULL) OR 
+           (old_value <> new_value) THEN
+            -- Use JSON_MERGE_PATCH to combine the existing result with a new JSON_OBJECT
+            SET result = JSON_MERGE_PATCH(
+                result,
+                JSON_OBJECT(current_key, new_value)
+            );
+        END IF;
+        SET i = i + 1;
+    END WHILE;
+    
+    RETURN result;
+END //
+
 -- Scrapers table triggers
 CREATE TRIGGER Scrapers_Insert_Audit
 AFTER INSERT ON Scrapers
@@ -154,48 +196,58 @@ CREATE TRIGGER Scrapers_Update_Audit
 AFTER UPDATE ON Scrapers
 FOR EACH ROW
 BEGIN
-    INSERT INTO ScraperLog (
-        id,
-        scraperRefId,
-        runId,
-        tableName,
-        action,
-        username,
-        appContext,
-        oldData,
-        newData
-    )
-    VALUES (
-        UUID_v7(),
-        NEW.scraperId,
-        UUID_v7(),
-        'Scrapers',
-        'update',
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system'),
-        GetScraperJSON(
-            OLD.scraperId,
-            OLD.adminRefId,
-            OLD.sourceSlug,
-            OLD.title,
-            OLD.scraperSrcTitle,
-            OLD.image,
-            OLD.config,
-            OLD.schedule,
-            OLD.isActive
-        ),
-        GetScraperJSON(
-            NEW.scraperId,
-            NEW.adminRefId,
-            NEW.sourceSlug,
-            NEW.title,
-            NEW.scraperSrcTitle,
-            NEW.image,
-            NEW.config,
-            NEW.schedule,
-            NEW.isActive
-        )
+    DECLARE old_json, new_json, changed_json JSON;
+    
+    SET old_json = GetScraperJSON(
+        OLD.scraperId,
+        OLD.adminRefId,
+        OLD.sourceSlug,
+        OLD.title,
+        OLD.scraperSrcTitle,
+        OLD.image,
+        OLD.config,
+        OLD.schedule,
+        OLD.isActive
     );
+    
+    SET new_json = GetScraperJSON(
+        NEW.scraperId,
+        NEW.adminRefId,
+        NEW.sourceSlug,
+        NEW.title,
+        NEW.scraperSrcTitle,
+        NEW.image,
+        NEW.config,
+        NEW.schedule,
+        NEW.isActive
+    );
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        INSERT INTO ScraperLog (
+            id,
+            scraperRefId,
+            runId,
+            tableName,
+            action,
+            username,
+            appContext,
+            oldData,
+            newData
+        )
+        VALUES (
+            UUID_v7(),
+            NEW.scraperId,
+            UUID_v7(),
+            'Scrapers',
+            'update',
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system'),
+            old_json,
+            changed_json
+        );
+    END IF;
 END //
 
 CREATE TRIGGER Scrapers_Delete_Audit

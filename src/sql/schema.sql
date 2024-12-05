@@ -648,39 +648,39 @@ CREATE FUNCTION GetDeeplinkJSON(
     p_originSource VARCHAR(64),
     p_region VARCHAR(10),
     p_web VARCHAR(512),
+    p_android VARCHAR(512),
+    p_iOS VARCHAR(512),
+    p_androidTv VARCHAR(512),
+    p_fireTv VARCHAR(512),
+    p_lg VARCHAR(512),
+    p_samsung VARCHAR(512),
+    p_tvOS VARCHAR(512),
+    p_roku VARCHAR(512),
     p_isActive BOOLEAN
-) RETURNS JSON
+)
+RETURNS JSON
 DETERMINISTIC
 BEGIN
     DECLARE result JSON;
-    SET result = JSON_OBJECT();
-    
-    -- Always include non-nullable fields
-    SET result = JSON_SET(result,
-        '$.contentId', p_contentId,
-        '$.sourceId', p_sourceId,
-        '$.sourceType', p_sourceType,
-        '$.originSource', p_originSource,
-        '$.isActive', COALESCE(p_isActive, true)
+    SET result = JSON_OBJECT(
+        'contentId', p_contentId,
+        'contentRefId', p_contentRefId,
+        'title', p_title,
+        'sourceId', p_sourceId,
+        'sourceType', p_sourceType,
+        'originSource', p_originSource,
+        'region', p_region,
+        'web', p_web,
+        'android', p_android,
+        'iOS', p_iOS,
+        'androidTv', p_androidTv,
+        'fireTv', p_fireTv,
+        'lg', p_lg,
+        'samsung', p_samsung,
+        'tvOS', p_tvOS,
+        'roku', p_roku,
+        'isActive', p_isActive
     );
-    
-    -- Add optional fields only if they are not null
-    IF p_contentRefId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.contentRefId', p_contentRefId);
-    END IF;
-
-    IF p_title IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.title', p_title);
-    END IF;
-
-    IF p_region IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.region', p_region);
-    END IF;
-
-    IF p_web IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.web', p_web);
-    END IF;
-    
     RETURN result;
 END //
 
@@ -691,46 +691,52 @@ CREATE FUNCTION GetPriceJSON(
     p_region VARCHAR(10),
     p_buySD DECIMAL(10,2),
     p_buyHD DECIMAL(10,2),
+    p_buyUHD DECIMAL(10,2),
     p_rentSD DECIMAL(10,2),
     p_rentHD DECIMAL(10,2),
+    p_rentUHD DECIMAL(10,2),
+    p_seriesBuySD DECIMAL(10,2),
+    p_seriesBuyHD DECIMAL(10,2),
+    p_seriesBuyUHD DECIMAL(10,2),
+    p_seriesRentSD DECIMAL(10,2),
+    p_seriesRentHD DECIMAL(10,2),
+    p_seriesRentUHD DECIMAL(10,2),
+    p_seasonBuySD DECIMAL(10,2),
+    p_seasonBuyHD DECIMAL(10,2),
+    p_seasonBuyUHD DECIMAL(10,2),
+    p_seasonRentSD DECIMAL(10,2),
+    p_seasonRentHD DECIMAL(10,2),
+    p_seasonRentUHD DECIMAL(10,2),
     p_isActive BOOLEAN
-) RETURNS JSON
+)
+RETURNS JSON
 DETERMINISTIC
 BEGIN
     DECLARE result JSON;
-    SET result = JSON_OBJECT();
-    
-    -- Always include non-nullable fields
-    SET result = JSON_SET(result,
-        '$.contentId', p_contentId,
-        '$.isActive', COALESCE(p_isActive, true)
+    SET result = JSON_OBJECT(
+        'contentId', p_contentId,
+        'contentRefId', p_contentRefId,
+        'region', p_region,
+        'buySD', p_buySD,
+        'buyHD', p_buyHD,
+        'buyUHD', p_buyUHD,
+        'rentSD', p_rentSD,
+        'rentHD', p_rentHD,
+        'rentUHD', p_rentUHD,
+        'seriesBuySD', p_seriesBuySD,
+        'seriesBuyHD', p_seriesBuyHD,
+        'seriesBuyUHD', p_seriesBuyUHD,
+        'seriesRentSD', p_seriesRentSD,
+        'seriesRentHD', p_seriesRentHD,
+        'seriesRentUHD', p_seriesRentUHD,
+        'seasonBuySD', p_seasonBuySD,
+        'seasonBuyHD', p_seasonBuyHD,
+        'seasonBuyUHD', p_seasonBuyUHD,
+        'seasonRentSD', p_seasonRentSD,
+        'seasonRentHD', p_seasonRentHD,
+        'seasonRentUHD', p_seasonRentUHD,
+        'isActive', p_isActive
     );
-    
-    -- Add optional fields only if they are not null
-    IF p_contentRefId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.contentRefId', p_contentRefId);
-    END IF;
-
-    IF p_region IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.region', p_region);
-    END IF;
-
-    IF p_buySD IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.buySD', p_buySD);
-    END IF;
-
-    IF p_buyHD IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.buyHD', p_buyHD);
-    END IF;
-
-    IF p_rentSD IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.rentSD', p_rentSD);
-    END IF;
-
-    IF p_rentHD IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.rentHD', p_rentHD);
-    END IF;
-    
     RETURN result;
 END //
 
@@ -869,35 +875,133 @@ BEGIN
     RETURN result;
 END //
 
--- Movies triggers
-DELIMITER //
+-- Function to get display title considering altTitle
+CREATE FUNCTION GetDisplayTitle(originalTitle VARCHAR(255), altTitle VARCHAR(255))
+RETURNS VARCHAR(255)
+DETERMINISTIC
+BEGIN
+    RETURN COALESCE(altTitle, originalTitle);
+END //
 
+-- Function to get only changed fields between two JSON objects
+CREATE FUNCTION GetChangedFieldsJSON(old_json JSON, new_json JSON)
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE result, keys_array TEXT;
+    DECLARE i INT;
+    DECLARE current_key TEXT;
+    DECLARE old_value, new_value TEXT;
+    
+    SET result = '{}';
+    SET keys_array = JSON_KEYS(new_json);
+    SET i = 0;
+    
+    WHILE i < JSON_LENGTH(keys_array) DO
+        SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
+        SET old_value = JSON_EXTRACT(old_json, CONCAT('$.', current_key));
+        SET new_value = JSON_EXTRACT(new_json, CONCAT('$.', current_key));
+        
+        -- Unquote the values for comparison if they're not NULL
+        IF old_value IS NOT NULL THEN
+            SET old_value = JSON_UNQUOTE(old_value);
+        END IF;
+        IF new_value IS NOT NULL THEN
+            SET new_value = JSON_UNQUOTE(new_value);
+        END IF;
+        
+        IF (old_value IS NULL AND new_value IS NOT NULL) OR 
+           (old_value IS NOT NULL AND new_value IS NULL) OR 
+           (old_value <> new_value) THEN
+            -- Use JSON_MERGE_PATCH to combine the existing result with a new JSON_OBJECT
+            SET result = JSON_MERGE_PATCH(
+                result,
+                JSON_OBJECT(current_key, new_value)
+            );
+        END IF;
+        SET i = i + 1;
+    END WHILE;
+    
+    RETURN result;
+END //
+
+-- Movies triggers
 CREATE TRIGGER Movies_Insert_Audit
 AFTER INSERT ON Movies
 FOR EACH ROW
 BEGIN
+    DECLARE display_title VARCHAR(255);
+    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
     CALL LogAudit('Movies', NEW.contentId, 'insert', NULL,
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.imdbId, NEW.rgId, 
-            NEW.description, NEW.releaseDate, NEW.posterPath, NEW.backdropPath, 
-            NEW.voteAverage, NEW.voteCount, NEW.isActive),
-        COALESCE(@username, 'system'), COALESCE(@appContext, 'system'));
+        GetContentJSON(
+            NEW.contentId, 
+            display_title,  -- Use display title
+            NEW.tmdbId, 
+            NEW.imdbId, 
+            NEW.rgId, 
+            NEW.description, 
+            NEW.releaseDate, 
+            NEW.posterPath, 
+            NEW.backdropPath, 
+            NEW.voteAverage, 
+            NEW.voteCount, 
+            NEW.isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
 END //
 
 CREATE TRIGGER Movies_Update_Audit
 AFTER UPDATE ON Movies
 FOR EACH ROW
 BEGIN
-    DECLARE old_json, new_json JSON;
-    SET old_json = GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.imdbId, OLD.rgId, 
-        OLD.description, OLD.releaseDate, OLD.posterPath, OLD.backdropPath, 
-        OLD.voteAverage, OLD.voteCount, OLD.isActive);
-    SET new_json = GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.imdbId, NEW.rgId, 
-        NEW.description, NEW.releaseDate, NEW.posterPath, NEW.backdropPath, 
-        NEW.voteAverage, NEW.voteCount, NEW.isActive);
+    DECLARE old_display_title, new_display_title VARCHAR(255);
+    DECLARE old_json, new_json, changed_json JSON;
     
-    IF old_json <> new_json THEN
-        CALL LogAudit('Movies', NEW.contentId, 'update', old_json, new_json,
-            COALESCE(@username, 'system'), COALESCE(@appContext, 'system'));
+    SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
+    SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    SET old_json = GetContentJSON(
+        OLD.contentId, 
+        old_display_title,  -- Use old display title
+        OLD.tmdbId, 
+        OLD.imdbId, 
+        OLD.rgId, 
+        OLD.description, 
+        OLD.releaseDate, 
+        OLD.posterPath, 
+        OLD.backdropPath, 
+        OLD.voteAverage, 
+        OLD.voteCount, 
+        OLD.isActive
+    );
+    
+    SET new_json = GetContentJSON(
+        NEW.contentId, 
+        new_display_title,  -- Use new display title
+        NEW.tmdbId, 
+        NEW.imdbId, 
+        NEW.rgId, 
+        NEW.description, 
+        NEW.releaseDate, 
+        NEW.posterPath, 
+        NEW.backdropPath, 
+        NEW.voteAverage, 
+        NEW.voteCount, 
+        NEW.isActive
+    );
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        CALL LogAudit('Movies', NEW.contentId, 'update',
+            old_json,
+            changed_json,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
     END IF;
 END //
 
@@ -906,10 +1010,24 @@ AFTER DELETE ON Movies
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Movies', OLD.contentId, 'delete',
-        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.imdbId, OLD.rgId, 
-            OLD.description, OLD.releaseDate, OLD.posterPath, OLD.backdropPath, 
-            OLD.voteAverage, OLD.voteCount, OLD.isActive),
-        NULL, COALESCE(@username, 'system'), COALESCE(@appContext, 'system'));
+        GetContentJSON(
+            OLD.contentId, 
+            GetDisplayTitle(OLD.title, OLD.altTitle),  -- Use display title
+            OLD.tmdbId, 
+            OLD.imdbId, 
+            OLD.rgId, 
+            OLD.description, 
+            OLD.releaseDate, 
+            OLD.posterPath, 
+            OLD.backdropPath, 
+            OLD.voteAverage, 
+            OLD.voteCount, 
+            OLD.isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
 END //
 
 -- Series triggers
@@ -917,28 +1035,78 @@ CREATE TRIGGER Series_Insert_Audit
 AFTER INSERT ON Series
 FOR EACH ROW
 BEGIN
+    DECLARE display_title VARCHAR(255);
+    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
     CALL LogAudit('Series', NEW.contentId, 'insert', NULL,
-        GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.imdbId, NEW.rgId, 
-            NEW.description, NEW.releaseDate, NEW.posterPath, NEW.backdropPath, 
-            NEW.voteAverage, NEW.voteCount, NEW.isActive),
-        COALESCE(@username, 'system'), COALESCE(@appContext, 'system'));
+        GetContentJSON(
+            NEW.contentId, 
+            display_title,  -- Use display title
+            NEW.tmdbId, 
+            NEW.imdbId, 
+            NEW.rgId, 
+            NEW.description, 
+            NEW.releaseDate, 
+            NEW.posterPath, 
+            NEW.backdropPath, 
+            NEW.voteAverage, 
+            NEW.voteCount, 
+            NEW.isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
 END //
 
 CREATE TRIGGER Series_Update_Audit
 AFTER UPDATE ON Series
 FOR EACH ROW
 BEGIN
-    DECLARE old_json, new_json JSON;
-    SET old_json = GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.imdbId, OLD.rgId, 
-        OLD.description, OLD.releaseDate, OLD.posterPath, OLD.backdropPath, 
-        OLD.voteAverage, OLD.voteCount, OLD.isActive);
-    SET new_json = GetContentJSON(NEW.contentId, NEW.title, NEW.tmdbId, NEW.imdbId, NEW.rgId, 
-        NEW.description, NEW.releaseDate, NEW.posterPath, NEW.backdropPath, 
-        NEW.voteAverage, NEW.voteCount, NEW.isActive);
+    DECLARE old_display_title, new_display_title VARCHAR(255);
+    DECLARE old_json, new_json, changed_json JSON;
     
-    IF old_json <> new_json THEN
-        CALL LogAudit('Series', NEW.contentId, 'update', old_json, new_json,
-            COALESCE(@username, 'system'), COALESCE(@appContext, 'system'));
+    SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
+    SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    SET old_json = GetContentJSON(
+        OLD.contentId, 
+        old_display_title,  -- Use old display title
+        OLD.tmdbId, 
+        OLD.imdbId, 
+        OLD.rgId, 
+        OLD.description, 
+        OLD.releaseDate, 
+        OLD.posterPath, 
+        OLD.backdropPath, 
+        OLD.voteAverage, 
+        OLD.voteCount, 
+        OLD.isActive
+    );
+    
+    SET new_json = GetContentJSON(
+        NEW.contentId, 
+        new_display_title,  -- Use new display title
+        NEW.tmdbId, 
+        NEW.imdbId, 
+        NEW.rgId, 
+        NEW.description, 
+        NEW.releaseDate, 
+        NEW.posterPath, 
+        NEW.backdropPath, 
+        NEW.voteAverage, 
+        NEW.voteCount, 
+        NEW.isActive
+    );
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        CALL LogAudit('Series', NEW.contentId, 'update',
+            old_json,
+            changed_json,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
     END IF;
 END //
 
@@ -947,10 +1115,24 @@ AFTER DELETE ON Series
 FOR EACH ROW
 BEGIN
     CALL LogAudit('Series', OLD.contentId, 'delete',
-        GetContentJSON(OLD.contentId, OLD.title, OLD.tmdbId, OLD.imdbId, OLD.rgId, 
-            OLD.description, OLD.releaseDate, OLD.posterPath, OLD.backdropPath, 
-            OLD.voteAverage, OLD.voteCount, OLD.isActive),
-        NULL, COALESCE(@username, 'system'), COALESCE(@appContext, 'system'));
+        GetContentJSON(
+            OLD.contentId, 
+            GetDisplayTitle(OLD.title, OLD.altTitle),  -- Use display title
+            OLD.tmdbId, 
+            OLD.imdbId, 
+            OLD.rgId, 
+            OLD.description, 
+            OLD.releaseDate, 
+            OLD.posterPath, 
+            OLD.backdropPath, 
+            OLD.voteAverage, 
+            OLD.voteCount, 
+            OLD.isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
 END //
 
 -- Seasons triggers
@@ -985,7 +1167,7 @@ CREATE TRIGGER Seasons_Update_Audit
 AFTER UPDATE ON Seasons
 FOR EACH ROW
 BEGIN
-    DECLARE old_json, new_json JSON;
+    DECLARE old_json, new_json, changed_json JSON;
     
     -- Set episodeCount to NULL for both old and new to ignore it in comparison
     SET old_json = GetSeasonJSON(
@@ -1016,10 +1198,12 @@ BEGIN
         NEW.isActive
     );
     
-    IF old_json <> new_json THEN
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit('Seasons', NEW.contentId, 'update',
             old_json,
-            new_json,
+            changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
         );
@@ -1086,44 +1270,54 @@ CREATE TRIGGER Episodes_Update_Audit
 AFTER UPDATE ON Episodes
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Episodes', NEW.contentId, 'update',
-        GetEpisodeJSON(
-            OLD.contentId,
-            OLD.contentRefId,
-            OLD.tmdbId,
-            OLD.imdbId,
-            OLD.rgId,
-            OLD.title,
-            OLD.description,
-            OLD.episodeNumber,
-            OLD.runtime,
-            OLD.releaseDate,
-            OLD.voteAverage,
-            OLD.voteCount,
-            OLD.posterPath,
-            OLD.backdropPath,
-            OLD.isActive
-        ),
-        GetEpisodeJSON(
-            NEW.contentId,
-            NEW.contentRefId,
-            NEW.tmdbId,
-            NEW.imdbId,
-            NEW.rgId,
-            NEW.title,
-            NEW.description,
-            NEW.episodeNumber,
-            NEW.runtime,
-            NEW.releaseDate,
-            NEW.voteAverage,
-            NEW.voteCount,
-            NEW.posterPath,
-            NEW.backdropPath,
-            NEW.isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+    DECLARE old_json, new_json, changed_json JSON;
+    
+    SET old_json = GetEpisodeJSON(
+        OLD.contentId,
+        OLD.contentRefId,
+        OLD.tmdbId,
+        OLD.imdbId,
+        OLD.rgId,
+        OLD.title,
+        OLD.description,
+        OLD.episodeNumber,
+        OLD.runtime,
+        OLD.releaseDate,
+        OLD.voteAverage,
+        OLD.voteCount,
+        OLD.posterPath,
+        OLD.backdropPath,
+        OLD.isActive
     );
+    
+    SET new_json = GetEpisodeJSON(
+        NEW.contentId,
+        NEW.contentRefId,
+        NEW.tmdbId,
+        NEW.imdbId,
+        NEW.rgId,
+        NEW.title,
+        NEW.description,
+        NEW.episodeNumber,
+        NEW.runtime,
+        NEW.releaseDate,
+        NEW.voteAverage,
+        NEW.voteCount,
+        NEW.posterPath,
+        NEW.backdropPath,
+        NEW.isActive
+    );
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        CALL LogAudit('Episodes', NEW.contentId, 'update',
+            old_json,
+            changed_json,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
+    END IF;
 END //
 
 CREATE TRIGGER Episodes_Delete_Audit
@@ -1267,9 +1461,29 @@ CREATE TRIGGER MoviesDeeplinks_Insert_Audit
 AFTER INSERT ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('MoviesDeeplinks', NEW.contentId, 'insert',
-        NULL,
-        GetDeeplinkJSON(NEW.contentId, NEW.contentRefId, NEW.title, NEW.sourceId, NEW.sourceType, NEW.originSource, NEW.region, NEW.web, NEW.isActive),
+    DECLARE display_title VARCHAR(255);
+    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    CALL LogAudit('MoviesDeeplinks', NEW.contentId, 'insert', NULL,
+        GetDeeplinkJSON(
+            NEW.contentId, 
+            NEW.contentRefId, 
+            display_title,
+            NEW.sourceId, 
+            NEW.sourceType, 
+            NEW.originSource, 
+            NEW.region, 
+            NEW.web,
+            NEW.android,
+            NEW.iOS,
+            NEW.androidTv,
+            NEW.fireTv,
+            NEW.lg,
+            NEW.samsung,
+            NEW.tvOS,
+            NEW.roku,
+            NEW.isActive
+        ),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1279,20 +1493,91 @@ CREATE TRIGGER MoviesDeeplinks_Update_Audit
 AFTER UPDATE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('MoviesDeeplinks', NEW.contentId, 'update',
-        GetDeeplinkJSON(OLD.contentId, OLD.contentRefId, OLD.title, OLD.sourceId, OLD.sourceType, OLD.originSource, OLD.region, OLD.web, OLD.isActive),
-        GetDeeplinkJSON(NEW.contentId, NEW.contentRefId, NEW.title, NEW.sourceId, NEW.sourceType, NEW.originSource, NEW.region, NEW.web, NEW.isActive),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+    DECLARE old_display_title, new_display_title VARCHAR(255);
+    DECLARE old_json, new_json, changed_json JSON;
+    
+    SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
+    SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    SET old_json = GetDeeplinkJSON(
+        OLD.contentId, 
+        OLD.contentRefId, 
+        old_display_title,
+        OLD.sourceId, 
+        OLD.sourceType, 
+        OLD.originSource, 
+        OLD.region, 
+        OLD.web,
+        OLD.android,
+        OLD.iOS,
+        OLD.androidTv,
+        OLD.fireTv,
+        OLD.lg,
+        OLD.samsung,
+        OLD.tvOS,
+        OLD.roku,
+        OLD.isActive
     );
+    
+    SET new_json = GetDeeplinkJSON(
+        NEW.contentId, 
+        NEW.contentRefId, 
+        new_display_title,
+        NEW.sourceId, 
+        NEW.sourceType, 
+        NEW.originSource, 
+        NEW.region, 
+        NEW.web,
+        NEW.android,
+        NEW.iOS,
+        NEW.androidTv,
+        NEW.fireTv,
+        NEW.lg,
+        NEW.samsung,
+        NEW.tvOS,
+        NEW.roku,
+        NEW.isActive
+    );
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        CALL LogAudit('MoviesDeeplinks', NEW.contentId, 'update',
+            old_json,
+            changed_json,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
+    END IF;
 END //
 
 CREATE TRIGGER MoviesDeeplinks_Delete_Audit
 AFTER DELETE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
+    DECLARE display_title VARCHAR(255);
+    SET display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
+    
     CALL LogAudit('MoviesDeeplinks', OLD.contentId, 'delete',
-        GetDeeplinkJSON(OLD.contentId, OLD.contentRefId, OLD.title, OLD.sourceId, OLD.sourceType, OLD.originSource, OLD.region, OLD.web, OLD.isActive),
+        GetDeeplinkJSON(
+            OLD.contentId, 
+            OLD.contentRefId, 
+            display_title,
+            OLD.sourceId, 
+            OLD.sourceType, 
+            OLD.originSource, 
+            OLD.region, 
+            OLD.web,
+            OLD.android,
+            OLD.iOS,
+            OLD.androidTv,
+            OLD.fireTv,
+            OLD.lg,
+            OLD.samsung,
+            OLD.tvOS,
+            OLD.roku,
+            OLD.isActive
+        ),
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -1304,9 +1589,29 @@ CREATE TRIGGER SeriesDeeplinks_Insert_Audit
 AFTER INSERT ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('SeriesDeeplinks', NEW.contentId, 'insert',
-        NULL,
-        GetDeeplinkJSON(NEW.contentId, NEW.contentRefId, NEW.title, NEW.sourceId, NEW.sourceType, NEW.originSource, NEW.region, NEW.web, NEW.isActive),
+    DECLARE display_title VARCHAR(255);
+    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    CALL LogAudit('SeriesDeeplinks', NEW.contentId, 'insert', NULL,
+        GetDeeplinkJSON(
+            NEW.contentId, 
+            NEW.contentRefId, 
+            display_title,
+            NEW.sourceId, 
+            NEW.sourceType, 
+            NEW.originSource, 
+            NEW.region, 
+            NEW.web,
+            NEW.android,
+            NEW.iOS,
+            NEW.androidTv,
+            NEW.fireTv,
+            NEW.lg,
+            NEW.samsung,
+            NEW.tvOS,
+            NEW.roku,
+            NEW.isActive
+        ),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1316,34 +1621,127 @@ CREATE TRIGGER SeriesDeeplinks_Update_Audit
 AFTER UPDATE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('SeriesDeeplinks', NEW.contentId, 'update',
-        GetDeeplinkJSON(OLD.contentId, OLD.contentRefId, OLD.title, OLD.sourceId, OLD.sourceType, OLD.originSource, OLD.region, OLD.web, OLD.isActive),
-        GetDeeplinkJSON(NEW.contentId, NEW.contentRefId, NEW.title, NEW.sourceId, NEW.sourceType, NEW.originSource, NEW.region, NEW.web, NEW.isActive),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+    DECLARE old_display_title, new_display_title VARCHAR(255);
+    DECLARE old_json, new_json, changed_json JSON;
+    
+    SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
+    SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    SET old_json = GetDeeplinkJSON(
+        OLD.contentId, 
+        OLD.contentRefId, 
+        old_display_title,
+        OLD.sourceId, 
+        OLD.sourceType, 
+        OLD.originSource, 
+        OLD.region, 
+        OLD.web,
+        OLD.android,
+        OLD.iOS,
+        OLD.androidTv,
+        OLD.fireTv,
+        OLD.lg,
+        OLD.samsung,
+        OLD.tvOS,
+        OLD.roku,
+        OLD.isActive
     );
+    
+    SET new_json = GetDeeplinkJSON(
+        NEW.contentId, 
+        NEW.contentRefId, 
+        new_display_title,
+        NEW.sourceId, 
+        NEW.sourceType, 
+        NEW.originSource, 
+        NEW.region, 
+        NEW.web,
+        NEW.android,
+        NEW.iOS,
+        NEW.androidTv,
+        NEW.fireTv,
+        NEW.lg,
+        NEW.samsung,
+        NEW.tvOS,
+        NEW.roku,
+        NEW.isActive
+    );
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        CALL LogAudit('SeriesDeeplinks', NEW.contentId, 'update',
+            old_json,
+            changed_json,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
+    END IF;
 END //
 
 CREATE TRIGGER SeriesDeeplinks_Delete_Audit
 AFTER DELETE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
+    DECLARE display_title VARCHAR(255);
+    SET display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
+    
     CALL LogAudit('SeriesDeeplinks', OLD.contentId, 'delete',
-        GetDeeplinkJSON(OLD.contentId, OLD.contentRefId, OLD.title, OLD.sourceId, OLD.sourceType, OLD.originSource, OLD.region, OLD.web, OLD.isActive),
+        GetDeeplinkJSON(
+            OLD.contentId, 
+            OLD.contentRefId, 
+            display_title,
+            OLD.sourceId, 
+            OLD.sourceType, 
+            OLD.originSource, 
+            OLD.region, 
+            OLD.web,
+            OLD.android,
+            OLD.iOS,
+            OLD.androidTv,
+            OLD.fireTv,
+            OLD.lg,
+            OLD.samsung,
+            OLD.tvOS,
+            OLD.roku,
+            OLD.isActive
+        ),
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
 END //
 
--- MoviesPrices triggers
+-- MoviesPrices triggers with correct number of arguments
 CREATE TRIGGER MoviesPrices_Insert_Audit
 AFTER INSERT ON MoviesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('MoviesPrices', NEW.contentId, 'insert',
-        NULL,
-        GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.rentSD, NEW.rentHD, NEW.isActive),
+    CALL LogAudit('MoviesPrices', NEW.contentId, 'insert', NULL,
+        GetPriceJSON(
+            NEW.contentId,
+            NEW.contentRefId,
+            NEW.region,
+            NEW.buySD,
+            NEW.buyHD,
+            NEW.buyUHD,
+            NEW.rentSD,
+            NEW.rentHD,
+            NEW.rentUHD,
+            NULL,  -- seriesBuySD
+            NULL,  -- seriesBuyHD
+            NULL,  -- seriesBuyUHD
+            NULL,  -- seriesRentSD
+            NULL,  -- seriesRentHD
+            NULL,  -- seriesRentUHD
+            NULL,  -- seasonBuySD
+            NULL,  -- seasonBuyHD
+            NULL,  -- seasonBuyUHD
+            NULL,  -- seasonRentSD
+            NULL,  -- seasonRentHD
+            NULL,  -- seasonRentUHD
+            NEW.isActive
+        ),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1353,12 +1751,68 @@ CREATE TRIGGER MoviesPrices_Update_Audit
 AFTER UPDATE ON MoviesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('MoviesPrices', NEW.contentId, 'update',
-        GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.rentSD, OLD.rentHD, OLD.isActive),
-        GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.rentSD, NEW.rentHD, NEW.isActive),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+    DECLARE old_json, new_json, changed_json JSON;
+    
+    SET old_json = GetPriceJSON(
+        OLD.contentId,
+        OLD.contentRefId,
+        OLD.region,
+        OLD.buySD,
+        OLD.buyHD,
+        OLD.buyUHD,
+        OLD.rentSD,
+        OLD.rentHD,
+        OLD.rentUHD,
+        NULL,  -- seriesBuySD
+        NULL,  -- seriesBuyHD
+        NULL,  -- seriesBuyUHD
+        NULL,  -- seriesRentSD
+        NULL,  -- seriesRentHD
+        NULL,  -- seriesRentUHD
+        NULL,  -- seasonBuySD
+        NULL,  -- seasonBuyHD
+        NULL,  -- seasonBuyUHD
+        NULL,  -- seasonRentSD
+        NULL,  -- seasonRentHD
+        NULL,  -- seasonRentUHD
+        OLD.isActive
     );
+    
+    SET new_json = GetPriceJSON(
+        NEW.contentId,
+        NEW.contentRefId,
+        NEW.region,
+        NEW.buySD,
+        NEW.buyHD,
+        NEW.buyUHD,
+        NEW.rentSD,
+        NEW.rentHD,
+        NEW.rentUHD,
+        NULL,  -- seriesBuySD
+        NULL,  -- seriesBuyHD
+        NULL,  -- seriesBuyUHD
+        NULL,  -- seriesRentSD
+        NULL,  -- seriesRentHD
+        NULL,  -- seriesRentUHD
+        NULL,  -- seasonBuySD
+        NULL,  -- seasonBuyHD
+        NULL,  -- seasonBuyUHD
+        NULL,  -- seasonRentSD
+        NULL,  -- seasonRentHD
+        NULL,  -- seasonRentUHD
+        NEW.isActive
+    );
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        CALL LogAudit('MoviesPrices', NEW.contentId, 'update',
+            old_json,
+            changed_json,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
+    END IF;
 END //
 
 CREATE TRIGGER MoviesPrices_Delete_Audit
@@ -1366,7 +1820,30 @@ AFTER DELETE ON MoviesPrices
 FOR EACH ROW
 BEGIN
     CALL LogAudit('MoviesPrices', OLD.contentId, 'delete',
-        GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.rentSD, OLD.rentHD, OLD.isActive),
+        GetPriceJSON(
+            OLD.contentId,
+            OLD.contentRefId,
+            OLD.region,
+            OLD.buySD,
+            OLD.buyHD,
+            OLD.buyUHD,
+            OLD.rentSD,
+            OLD.rentHD,
+            OLD.rentUHD,
+            NULL,  -- seriesBuySD
+            NULL,  -- seriesBuyHD
+            NULL,  -- seriesBuyUHD
+            NULL,  -- seriesRentSD
+            NULL,  -- seriesRentHD
+            NULL,  -- seriesRentUHD
+            NULL,  -- seasonBuySD
+            NULL,  -- seasonBuyHD
+            NULL,  -- seasonBuyUHD
+            NULL,  -- seasonRentSD
+            NULL,  -- seasonRentHD
+            NULL,  -- seasonRentUHD
+            OLD.isActive
+        ),
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -1378,9 +1855,8 @@ CREATE TRIGGER SeriesPrices_Insert_Audit
 AFTER INSERT ON SeriesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('SeriesPrices', NEW.contentId, 'insert',
-        NULL,
-        GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.rentSD, NEW.rentHD, NEW.isActive),
+    CALL LogAudit('SeriesPrices', NEW.contentId, 'insert', NULL,
+        GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1390,12 +1866,22 @@ CREATE TRIGGER SeriesPrices_Update_Audit
 AFTER UPDATE ON SeriesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('SeriesPrices', NEW.contentId, 'update',
-        GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.rentSD, OLD.rentHD, OLD.isActive),
-        GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.rentSD, NEW.rentHD, NEW.isActive),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
+    DECLARE old_json, new_json, changed_json JSON;
+    
+    SET old_json = GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.buyUHD, OLD.rentSD, OLD.rentHD, OLD.rentUHD, OLD.seriesBuySD, OLD.seriesBuyHD, OLD.seriesBuyUHD, OLD.seriesRentSD, OLD.seriesRentHD, OLD.seriesRentUHD, OLD.seasonBuySD, OLD.seasonBuyHD, OLD.seasonBuyUHD, OLD.seasonRentSD, OLD.seasonRentHD, OLD.seasonRentUHD, OLD.isActive);
+    
+    SET new_json = GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive);
+    
+    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    
+    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+        CALL LogAudit('SeriesPrices', NEW.contentId, 'update',
+            old_json,
+            changed_json,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
+    END IF;
 END //
 
 CREATE TRIGGER SeriesPrices_Delete_Audit
@@ -1403,7 +1889,7 @@ AFTER DELETE ON SeriesPrices
 FOR EACH ROW
 BEGIN
     CALL LogAudit('SeriesPrices', OLD.contentId, 'delete',
-        GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.rentSD, OLD.rentHD, OLD.isActive),
+        GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.buyUHD, OLD.rentSD, OLD.rentHD, OLD.rentUHD, OLD.seriesBuySD, OLD.seriesBuyHD, OLD.seriesBuyUHD, OLD.seriesRentSD, OLD.seriesRentHD, OLD.seriesRentUHD, OLD.seasonBuySD, OLD.seasonBuyHD, OLD.seasonBuyUHD, OLD.seasonRentSD, OLD.seasonRentHD, OLD.seasonRentUHD, OLD.isActive),
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
