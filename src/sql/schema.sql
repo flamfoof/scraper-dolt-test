@@ -656,7 +656,8 @@ CREATE FUNCTION GetDeeplinkJSON(
     p_samsung VARCHAR(512),
     p_tvOS VARCHAR(512),
     p_roku VARCHAR(512),
-    p_isActive BOOLEAN
+    p_isActive BOOLEAN,
+    p_tmdbId VARCHAR(20)
 )
 RETURNS JSON
 DETERMINISTIC
@@ -679,7 +680,8 @@ BEGIN
         'samsung', p_samsung,
         'tvOS', p_tvOS,
         'roku', p_roku,
-        'isActive', p_isActive
+        'isActive', p_isActive,
+        'tmdbId', p_tmdbId
     );
     RETURN result;
 END //
@@ -1458,11 +1460,44 @@ END //
 
 -- MoviesDeeplinks triggers
 CREATE TRIGGER MoviesDeeplinks_Insert_Audit
-AFTER INSERT ON MoviesDeeplinks
+BEFORE INSERT ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
+    DECLARE inherited_title VARCHAR(255);
+    DECLARE inherited_tmdbId VARCHAR(20);
+    DECLARE inherited_releaseDate DATE;
     DECLARE display_title VARCHAR(255);
-    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    -- If contentRefId exists, get data from Movies table
+    IF NEW.contentRefId IS NOT NULL THEN
+        SELECT 
+            title, 
+            tmdbId,
+            releaseDate
+        INTO 
+            inherited_title,
+            inherited_tmdbId,
+            inherited_releaseDate
+        FROM Movies 
+        WHERE contentId = NEW.contentRefId;
+        
+        -- Set the values before insert
+        IF NEW.title IS NULL OR TRIM(NEW.title) = '' THEN
+            SET NEW.title = inherited_title;
+        END IF;
+        
+        IF NEW.tmdbId IS NULL OR TRIM(NEW.tmdbId) = '' THEN
+            SET NEW.tmdbId = inherited_tmdbId;
+        END IF;
+        
+        IF NEW.releaseDate IS NULL THEN
+            SET NEW.releaseDate = inherited_releaseDate;
+        END IF;
+        
+        SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    ELSE
+        SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    END IF;
     
     CALL LogAudit('MoviesDeeplinks', NEW.contentId, 'insert', NULL,
         GetDeeplinkJSON(
@@ -1482,7 +1517,8 @@ BEGIN
             NEW.samsung,
             NEW.tvOS,
             NEW.roku,
-            NEW.isActive
+            NEW.isActive,
+            NEW.tmdbId
         ),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -1516,7 +1552,8 @@ BEGIN
         OLD.samsung,
         OLD.tvOS,
         OLD.roku,
-        OLD.isActive
+        OLD.isActive,
+        OLD.tmdbId
     );
     
     SET new_json = GetDeeplinkJSON(
@@ -1536,7 +1573,8 @@ BEGIN
         NEW.samsung,
         NEW.tvOS,
         NEW.roku,
-        NEW.isActive
+        NEW.isActive,
+        NEW.tmdbId
     );
     
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
@@ -1576,7 +1614,8 @@ BEGIN
             OLD.samsung,
             OLD.tvOS,
             OLD.roku,
-            OLD.isActive
+            OLD.isActive,
+            OLD.tmdbId
         ),
         NULL,
         COALESCE(@username, 'system'),
@@ -1586,11 +1625,44 @@ END //
 
 -- SeriesDeeplinks triggers
 CREATE TRIGGER SeriesDeeplinks_Insert_Audit
-AFTER INSERT ON SeriesDeeplinks
+BEFORE INSERT ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
+    DECLARE inherited_title VARCHAR(255);
+    DECLARE inherited_tmdbId VARCHAR(20);
+    DECLARE inherited_releaseDate DATE;
     DECLARE display_title VARCHAR(255);
-    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    
+    -- If contentRefId exists, get data from Series table
+    IF NEW.contentRefId IS NOT NULL THEN
+        SELECT 
+            title, 
+            tmdbId,
+            releaseDate
+        INTO 
+            inherited_title,
+            inherited_tmdbId,
+            inherited_releaseDate
+        FROM Series 
+        WHERE contentId = NEW.contentRefId;
+        
+        -- Set the values before insert
+        IF NEW.title IS NULL OR TRIM(NEW.title) = '' THEN
+            SET NEW.title = inherited_title;
+        END IF;
+        
+        IF NEW.tmdbId IS NULL OR TRIM(NEW.tmdbId) = '' THEN
+            SET NEW.tmdbId = inherited_tmdbId;
+        END IF;
+        
+        IF NEW.releaseDate IS NULL THEN
+            SET NEW.releaseDate = inherited_releaseDate;
+        END IF;
+        
+        SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    ELSE
+        SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    END IF;
     
     CALL LogAudit('SeriesDeeplinks', NEW.contentId, 'insert', NULL,
         GetDeeplinkJSON(
@@ -1610,7 +1682,8 @@ BEGIN
             NEW.samsung,
             NEW.tvOS,
             NEW.roku,
-            NEW.isActive
+            NEW.isActive,
+            NEW.tmdbId
         ),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -1644,7 +1717,8 @@ BEGIN
         OLD.samsung,
         OLD.tvOS,
         OLD.roku,
-        OLD.isActive
+        OLD.isActive,
+        OLD.tmdbId
     );
     
     SET new_json = GetDeeplinkJSON(
@@ -1664,7 +1738,8 @@ BEGIN
         NEW.samsung,
         NEW.tvOS,
         NEW.roku,
-        NEW.isActive
+        NEW.isActive,
+        NEW.tmdbId
     );
     
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
@@ -1704,7 +1779,8 @@ BEGIN
             OLD.samsung,
             OLD.tvOS,
             OLD.roku,
-            OLD.isActive
+            OLD.isActive,
+            OLD.tmdbId
         ),
         NULL,
         COALESCE(@username, 'system'),
