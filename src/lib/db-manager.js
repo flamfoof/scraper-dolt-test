@@ -1,6 +1,9 @@
 import mariadb from "mariadb";
 import PQueue from "p-queue";
+import { configDotenv } from "dotenv";
 import { z } from "zod";
+
+configDotenv();
 
 const dbConfigSchema = z.object({
 	host: z.string(),
@@ -35,6 +38,9 @@ export class DatabaseManager {
 			this.connection = await mariadb.createConnection({
 				...this.config
 			})
+			
+			await this.setUserConfigs();
+			
 			conn.release();
 			return true;
 		} catch (error) {
@@ -45,6 +51,11 @@ export class DatabaseManager {
 	async disconnect() {
 		await this.connection.end();
 		await this.pool.end();
+	}
+
+	async setUserConfigs() {
+		await this.connection.query(`SET @username = '${process.env.MASTER_DB_USER}'`);
+		await this.connection.query(`SET @appContext = 'user'`);
 	}
 
 	async executeQuery(query, params = []) {
@@ -64,7 +75,7 @@ export class DatabaseManager {
 		return this.queue.add(async () => {
 			let conn;
 			try {
-				conn = await this.connection;
+				conn = this.connection;
 				const rows = await conn.query(query, params);
 				return rows;
 			} finally {
