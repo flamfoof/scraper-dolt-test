@@ -1636,16 +1636,17 @@ BEGIN
     -- If contentRefId exists, get data from Series table
     IF NEW.contentRefId IS NOT NULL THEN
         SELECT 
-            title, 
-            tmdbId,
-            releaseDate
+            title,
+            releaseDate,
+            tmdbId
         INTO 
             inherited_title,
-            inherited_tmdbId,
-            inherited_releaseDate
-        FROM Series 
+            inherited_releaseDate,
+            inherited_tmdbId
+        FROM Episodes 
         WHERE contentId = NEW.contentRefId;
         
+
         -- Set the values before insert
         IF NEW.title IS NULL OR TRIM(NEW.title) = '' THEN
             SET NEW.title = inherited_title;
