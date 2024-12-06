@@ -234,11 +234,204 @@ BEGIN
     END WHILE;
 END //
 
-CALL InsertRandomData(); //
+DELIMITER ;
+
+CALL InsertRandomData();
+
+DROP PROCEDURE IF EXISTS TestTableUpdatesWithCount;
+
+DELIMITER //
+
+CREATE PROCEDURE TestTableUpdatesWithCount(IN update_count INT)
+BEGIN
+    -- Create temporary tables with IDs to update
+    CREATE TEMPORARY TABLE tmp_movies_original AS 
+    SELECT contentId, title, runtime, releaseDate, isActive 
+    FROM (
+        SELECT contentId, title, runtime, releaseDate, isActive,
+               @row_num := @row_num + 1 AS row_num
+        FROM Movies, (SELECT @row_num := 0) AS r
+    ) ranked
+    WHERE row_num <= update_count;
+    
+    CREATE TEMPORARY TABLE tmp_series_original AS 
+    SELECT contentId, title, totalSeasons, releaseDate, isActive 
+    FROM (
+        SELECT contentId, title, totalSeasons, releaseDate, isActive,
+               @row_num2 := @row_num2 + 1 AS row_num
+        FROM Series, (SELECT @row_num2 := 0) AS r
+    ) ranked
+    WHERE row_num <= update_count;
+    
+    CREATE TEMPORARY TABLE tmp_episodes_original AS 
+    SELECT contentId, title, episodeNumber, runtime, releaseDate 
+    FROM (
+        SELECT contentId, title, episodeNumber, runtime, releaseDate,
+               @row_num3 := @row_num3 + 1 AS row_num
+        FROM Episodes, (SELECT @row_num3 := 0) AS r
+    ) ranked
+    WHERE row_num <= update_count;
+
+    CREATE TEMPORARY TABLE tmp_movies_deeplinks_ids AS 
+    SELECT contentId 
+    FROM (
+        SELECT contentId,
+               @row_num5 := @row_num5 + 1 AS row_num
+        FROM MoviesDeeplinks, (SELECT @row_num5 := 0) AS r
+    ) ranked
+    WHERE row_num <= update_count;
+
+    CREATE TEMPORARY TABLE tmp_series_deeplinks_ids AS 
+    SELECT contentId 
+    FROM (
+        SELECT contentId,
+               @row_num6 := @row_num6 + 1 AS row_num
+        FROM SeriesDeeplinks, (SELECT @row_num6 := 0) AS r
+    ) ranked
+    WHERE row_num <= update_count;
+
+    CREATE TEMPORARY TABLE tmp_movies_prices_ids AS 
+    SELECT contentId 
+    FROM (
+        SELECT contentId,
+               @row_num7 := @row_num7 + 1 AS row_num
+        FROM MoviesPrices, (SELECT @row_num7 := 0) AS r
+    ) ranked
+    WHERE row_num <= update_count;
+
+    CREATE TEMPORARY TABLE tmp_series_prices_ids AS 
+    SELECT contentId 
+    FROM (
+        SELECT contentId,
+               @row_num8 := @row_num8 + 1 AS row_num
+        FROM SeriesPrices, (SELECT @row_num8 := 0) AS r
+    ) ranked
+    WHERE row_num <= update_count;
+
+    -- Test Movies updates
+    UPDATE Movies 
+    SET 
+        title = CONCAT(title, ' - Extended Cut'),
+        runtime = runtime + 10,
+        releaseDate = DATE_ADD(releaseDate, INTERVAL 1 DAY),
+        isActive = NOT isActive
+    WHERE contentId IN (SELECT contentId FROM tmp_movies_original);
+
+    -- Test Series updates
+    UPDATE Series 
+    SET 
+        title = CONCAT(title, ' - Remastered'),
+        totalSeasons = totalSeasons + 1,
+        releaseDate = DATE_ADD(releaseDate, INTERVAL 1 YEAR),
+        isActive = NOT isActive
+    WHERE contentId IN (SELECT contentId FROM tmp_series_original);
+
+    -- Test Episodes updates
+    UPDATE Episodes 
+    SET 
+        title = CONCAT(title, " - Director's Cut"),
+        episodeNumber = episodeNumber + 100,
+        runtime = COALESCE(runtime, 0) + 5,
+        releaseDate = DATE_ADD(releaseDate, INTERVAL 7 DAY)
+    WHERE contentId IN (SELECT contentId FROM tmp_episodes_original);
+
+    -- Test MoviesDeeplinks updates
+    UPDATE MoviesDeeplinks 
+    SET 
+        title = CONCAT(COALESCE(title, 'Movie'), ' - New Version'),
+        web = CONCAT(COALESCE(web, 'https://'), '/updated'),
+        android = CONCAT(COALESCE(android, 'android://'), '/updated'),
+        isActive = NOT isActive
+    WHERE contentId IN (SELECT contentId FROM tmp_movies_deeplinks_ids);
+
+    -- Test SeriesDeeplinks updates
+    UPDATE SeriesDeeplinks 
+    SET 
+        title = CONCAT(COALESCE(title, 'Series'), ' - New Version'),
+        web = CONCAT(COALESCE(web, 'https://'), '/updated'),
+        android = CONCAT(COALESCE(android, 'android://'), '/updated'),
+        isActive = NOT isActive
+    WHERE contentId IN (SELECT contentId FROM tmp_series_deeplinks_ids);
+
+    -- Test MoviesPrices updates
+    UPDATE MoviesPrices 
+    SET 
+        buySD = buySD * 1.1,
+        buyHD = buyHD * 1.1,
+        buyUHD = buyUHD * 1.1,
+        rentSD = rentSD * 1.1,
+        rentHD = rentHD * 1.1,
+        rentUHD = rentUHD * 1.1,
+        isActive = NOT isActive
+    WHERE contentId IN (SELECT contentId FROM tmp_movies_prices_ids);
+
+    -- Test SeriesPrices updates
+    UPDATE SeriesPrices 
+    SET 
+        buySD = buySD * 1.1,
+        buyHD = buyHD * 1.1,
+        buyUHD = buyUHD * 1.1,
+        rentSD = rentSD * 1.1,
+        rentHD = rentHD * 1.1,
+        rentUHD = rentUHD * 1.1,
+        seasonBuySD = seasonBuySD * 1.1,
+        seasonBuyHD = seasonBuyHD * 1.1,
+        seasonBuyUHD = seasonBuyUHD * 1.1,
+        seasonRentSD = seasonRentSD * 1.1,
+        seasonRentHD = seasonRentHD * 1.1,
+        seasonRentUHD = seasonRentUHD * 1.1,
+        isActive = NOT isActive
+    WHERE contentId IN (SELECT contentId FROM tmp_series_prices_ids);
+
+    -- Verify updates with original values
+    SELECT 'Movies Updates' as Test, 
+           m.contentId, 
+           o.title as old_title, 
+           m.title as new_title,
+           o.runtime as old_runtime,
+           m.runtime as new_runtime,
+           o.isActive as old_active,
+           m.isActive as new_active
+    FROM Movies m
+    JOIN tmp_movies_original o ON m.contentId = o.contentId;
+
+    SELECT 'Series Updates' as Test,
+           s.contentId,
+           o.title as old_title,
+           s.title as new_title,
+           o.totalSeasons as old_seasons,
+           s.totalSeasons as new_seasons,
+           o.isActive as old_active,
+           s.isActive as new_active
+    FROM Series s
+    JOIN tmp_series_original o ON s.contentId = o.contentId;
+
+    SELECT 'Episodes Updates' as Test,
+           e.contentId,
+           o.title as old_title,
+           e.title as new_title,
+           o.episodeNumber as old_episode,
+           e.episodeNumber as new_episode,
+           o.runtime as old_runtime,
+           e.runtime as new_runtime
+    FROM Episodes e
+    JOIN tmp_episodes_original o ON e.contentId = o.contentId;
+
+    -- Clean up temporary tables
+    DROP TEMPORARY TABLE IF EXISTS tmp_movies_original;
+    DROP TEMPORARY TABLE IF EXISTS tmp_series_original;
+    DROP TEMPORARY TABLE IF EXISTS tmp_episodes_original;
+    DROP TEMPORARY TABLE IF EXISTS tmp_scrapers_ids;
+    DROP TEMPORARY TABLE IF EXISTS tmp_movies_deeplinks_ids;
+    DROP TEMPORARY TABLE IF EXISTS tmp_series_deeplinks_ids;
+    DROP TEMPORARY TABLE IF EXISTS tmp_movies_prices_ids;
+    DROP TEMPORARY TABLE IF EXISTS tmp_series_prices_ids;
+END //
 
 DELIMITER ;
 
-
+-- Example usage:
+CALL TestTableUpdatesWithCount(5);
 
 -- Switch to Scrapers database for test data generation
 USE Scrapers;
