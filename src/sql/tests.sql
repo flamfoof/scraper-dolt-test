@@ -14,6 +14,9 @@ BEGIN
     DECLARE episode_content_id UUID;
     DECLARE movie_deeplink_id UUID;
     DECLARE episode_deeplink_id UUID;
+    DECLARE movie_release_date DATE;
+    DECLARE series_release_date DATE;
+    DECLARE episode_release_date DATE;
     
     WHILE i <= 1000 DO
         -- Generate UUIDs
@@ -24,14 +27,22 @@ BEGIN
         SET movie_deeplink_id = UUID();
         SET episode_deeplink_id = UUID();
         
+        SET movie_release_date = DATE_ADD('1990-01-01', 
+            INTERVAL FLOOR(RAND() * DATEDIFF('2024-12-31', '1990-01-01')) DAY);
+        SET series_release_date = DATE_ADD('1990-01-01', 
+            INTERVAL FLOOR(RAND() * DATEDIFF('2024-12-31', '1990-01-01')) DAY);
+        SET episode_release_date = DATE_ADD(series_release_date, 
+            INTERVAL FLOOR(RAND() * 365) DAY);
+
         -- Insert a movie and its related records
-        INSERT INTO Movies (contentId, title, tmdbId, isActive)
-        VALUES (movie_content_id, CONCAT('Movie ', i), i+1000, true);
+        INSERT INTO Movies (contentId, title, tmdbId, releaseDate, isActive)
+        VALUES (movie_content_id, CONCAT('Movie ', i), i+1000, movie_release_date, true);
         
         -- Create multiple deeplinks for the same movie with different sources
         INSERT INTO MoviesDeeplinks (
             contentId, 
             contentRefId, 
+            releaseDate,
             sourceId, 
             sourceType, 
             originSource, 
@@ -50,6 +61,7 @@ BEGIN
             (
                 movie_deeplink_id, 
                 movie_content_id, 
+                movie_release_date,
                 69, 
                 'didney-world', 
                 'tmdb', 
@@ -67,6 +79,7 @@ BEGIN
             (
                 UUID(), 
                 movie_content_id, 
+                movie_release_date,
                 69, 
                 'fidney-world', 
                 'freecast', 
@@ -110,21 +123,22 @@ BEGIN
             );
         
         -- Insert a series and its related records
-        INSERT INTO Series (contentId, title, tmdbId)
-        VALUES (series_content_id, CONCAT('TV Series ', i), i+1000);
+        INSERT INTO Series (contentId, title, tmdbId, releaseDate)
+        VALUES (series_content_id, CONCAT('TV Series ', i), i+1000, series_release_date);
         
         -- Insert a season
         INSERT INTO Seasons (contentId, contentRefId, seasonNumber)
         VALUES (season_content_id, series_content_id, 1);
         
         -- Insert an episode
-        INSERT INTO Episodes (contentId, contentRefId, episodeNumber, title, tmdbId)
-        VALUES (episode_content_id, season_content_id, 1, CONCAT('Episode ', i), i+1000);
+        INSERT INTO Episodes (contentId, contentRefId, episodeNumber, title, tmdbId, releaseDate)
+        VALUES (episode_content_id, season_content_id, 1, CONCAT('Episode ', i), i+1000, episode_release_date);
         
         -- Create multiple deeplinks for the same episode with different sources
         INSERT INTO SeriesDeeplinks (
             contentId, 
             contentRefId, 
+            releaseDate,
             sourceId, 
             sourceType, 
             originSource, 
@@ -143,6 +157,7 @@ BEGIN
             (
                 episode_deeplink_id, 
                 episode_content_id, 
+                episode_release_date,
                 69, 
                 'didney-world', 
                 'tmdb', 
@@ -160,6 +175,7 @@ BEGIN
             (
                 UUID(), 
                 episode_content_id, 
+                episode_release_date,
                 69, 
                 'fidney-world', 
                 'freecast', 
@@ -252,6 +268,7 @@ BEGIN
                @row_num := @row_num + 1 AS row_num
         FROM Movies, (SELECT @row_num := 0) AS r
     ) ranked
+    
     WHERE row_num <= update_count;
     
     CREATE TEMPORARY TABLE tmp_series_original AS 
