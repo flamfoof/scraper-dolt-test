@@ -186,7 +186,7 @@ CREATE TABLE Episodes (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT EpisodesUuid_UK UNIQUE KEY (contentId),
-    CONSTRAINT EpisodesTmdb_UK UNIQUE KEY (tmdbId),
+    CONSTRAINT EpisodesNumber_UK UNIQUE KEY (contentRefId, episodeNumber),
     CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
         REFERENCES Seasons(contentId) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
