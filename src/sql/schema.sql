@@ -1386,6 +1386,26 @@ BEGIN
     WHERE contentId = OLD.contentRefId;
 END //
 
+-- Create trigger to update Series.totalEpisodes when a new episode is added
+CREATE TRIGGER Episodes_Series_Insert AFTER INSERT ON Episodes
+FOR EACH ROW
+BEGIN
+    UPDATE Series serie
+    INNER JOIN Seasons season ON season.contentRefId = serie.contentId
+    SET serie.totalEpisodes = serie.totalEpisodes + 1
+    WHERE season.contentId = NEW.contentRefId;
+END //
+
+-- Create trigger to update Series.totalEpisodes when an episode is deleted
+CREATE TRIGGER Episodes_Series_Delete AFTER DELETE ON Episodes
+FOR EACH ROW
+BEGIN
+    UPDATE Series serie
+    INNER JOIN Seasons season ON season.contentRefId = serie.contentId
+    SET serie.totalEpisodes = serie.totalEpisodes - 1
+    WHERE season.contentId = OLD.contentRefId;
+END //
+
 -- Triggers for propagating isActive changes
 
 -- Series -> Seasons -> Episodes
