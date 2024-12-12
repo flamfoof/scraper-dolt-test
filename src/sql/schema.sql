@@ -7,70 +7,8 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 DELIMITER //
 
-DROP PROCEDURE IF EXISTS DropAllProcedures //
-
-CREATE PROCEDURE DropAllProcedures()
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE procName VARCHAR(255);
-    DECLARE cur CURSOR FOR 
-        SELECT SPECIFIC_NAME 
-        FROM information_schema.ROUTINES 
-        WHERE ROUTINE_SCHEMA = DATABASE() 
-        AND ROUTINE_TYPE = 'PROCEDURE'
-        AND SPECIFIC_NAME != 'DropAllProcedures';
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-    
-    OPEN cur;
-    read_loop: LOOP
-        FETCH NEXT FROM cur INTO procName;
-        
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        SET @drop_proc_sql = CONCAT('DROP PROCEDURE IF EXISTS ', procName);
-        PREPARE stmt FROM @drop_proc_sql;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END LOOP;
-
-    CLOSE cur;
-END //
-
-CALL DropAllProcedures(); //
-
-CREATE PROCEDURE DropAllTables()
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE tableName VARCHAR(255);
-    DECLARE cur CURSOR FOR 
-        SELECT TABLE_NAME 
-        FROM information_schema.TABLES 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_TYPE = 'BASE TABLE';
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-    
-    SET FOREIGN_KEY_CHECKS = 0;
-
-    OPEN cur;
-    read_loop: LOOP
-        FETCH NEXT FROM cur INTO tableName;
-        
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        SET @drop_table_sql = CONCAT('DROP TABLE IF EXISTS ', tableName);
-        PREPARE stmt FROM @drop_table_sql;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END LOOP;
-
-    CLOSE cur;
-END //
-
-
+CALL DropAllFunctions(); //
+CALL DropAllTriggers(); //
 CALL DropAllTables(); //
 
 DELIMITER ;
@@ -84,6 +22,7 @@ CREATE TABLE Movies (
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
+    titleid UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NOT NULL,
     altTitle VARCHAR(255) NULL,
     description TEXT NULL,
@@ -115,6 +54,7 @@ CREATE TABLE Series (
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
+    titleid UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NOT NULL,
     altTitle VARCHAR(255) NULL,
     description TEXT NULL,
@@ -146,6 +86,7 @@ CREATE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     contentRefId UUID NOT NULL COMMENT 'Reference to Series.contentId',
+    titleid UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NULL,
     description TEXT NULL,
     seasonNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
@@ -172,6 +113,7 @@ CREATE TABLE Episodes (
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
+    titleid UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NOT NULL,
     description TEXT NULL,
     episodeNumber SMALLINT DEFAULT -1 NOT NULL,
@@ -277,9 +219,6 @@ CREATE TABLE MoviesPrices (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     PRIMARY KEY (id),
-    INDEX idx_content_id (contentId),
-    INDEX idx_content_ref_id (contentRefId),
-    INDEX idx_region (region),
     CONSTRAINT MoviesPricesContent_UK UNIQUE KEY (contentRefId, region),
     CONSTRAINT MoviesPricesDeeplinks_FK
         FOREIGN KEY (contentRefId)
@@ -321,9 +260,6 @@ CREATE TABLE SeriesPrices (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     PRIMARY KEY (id),
-    INDEX idx_content_id (contentId),
-    INDEX idx_content_ref_id (contentRefId),
-    INDEX idx_region (region),
     CONSTRAINT SeriesPricesContent_UK UNIQUE KEY (contentRefId, region),
     CONSTRAINT SeriesPricesDeeplinks_FK
         FOREIGN KEY (contentRefId)
@@ -352,17 +288,25 @@ CREATE INDEX AuditLogContext_IDX USING BTREE ON AuditLog (appContext);
 DROP TABLE IF EXISTS Deeplinks;
 
 -- Indexes for better query performance
-CREATE INDEX MoviesTitle_IDX USING FULLTEXT ON Movies (title);
+CREATE FULLTEXT INDEX MoviesTitle_IDX ON Movies (title);
+CREATE INDEX MoviesContentId_IDX USING BTREE ON Movies (contentId);
+CREATE INDEX MoviesTitleId_IDX USING BTREE ON Movies (titleId);
 CREATE INDEX MoviesActive_IDX USING BTREE ON Movies (isActive);
 
-CREATE INDEX SeriesTitle_IDX USING FULLTEXT ON Series (title);
+CREATE FULLTEXT INDEX SeriesTitle_IDX ON Series (title);
+CREATE INDEX SeriesContentId_IDX USING BTREE ON Series (contentId);
+CREATE INDEX SeriesTitleId_IDX USING BTREE ON Series (titleId);
 CREATE INDEX SeriesActive_IDX USING BTREE ON Series (isActive);
 
-CREATE INDEX SeasonsTitle_IDX USING FULLTEXT ON Seasons (title);
+CREATE FULLTEXT INDEX SeasonsTitle_IDX ON Seasons (title);
+CREATE INDEX SeasonsContentId_IDX USING BTREE ON Seasons (contentId);
+CREATE INDEX SeasonsTitleId_IDX USING BTREE ON Seasons (titleId);
 CREATE INDEX SeasonsShow_IDX USING BTREE ON Seasons (contentRefId, seasonNumber);
 CREATE INDEX SeasonsActive_IDX USING BTREE ON Seasons (isActive);
 
-CREATE INDEX EpisodesTitle_IDX USING FULLTEXT ON Episodes (title);
+CREATE FULLTEXT INDEX EpisodesTitle_IDX ON Episodes (title);
+CREATE INDEX EpisodesContentId_IDX USING BTREE ON Episodes (contentId);
+CREATE INDEX EpisodesTitleId_IDX USING BTREE ON Episodes (titleId);
 CREATE INDEX EpisodesSeason_IDX USING BTREE ON Episodes (contentRefId);
 CREATE INDEX EpisodesActive_IDX USING BTREE ON Episodes (isActive);
 
@@ -374,69 +318,17 @@ CREATE INDEX SeriesDeeplinksContent_IDX USING BTREE ON SeriesDeeplinks (contentI
 CREATE UNIQUE INDEX SeriesDeeplinksRefSource_UK ON SeriesDeeplinks (contentRefId, sourceId, originSource);
 CREATE INDEX SeriesDeeplinksSource_IDX USING BTREE ON SeriesDeeplinks (sourceId, sourceType, region);
 
+
+CREATE INDEX MoviesPrices_IDX_content_id ON MoviesPrices (contentId);
+CREATE INDEX MoviesPrices_IDX_content_ref_id ON MoviesPrices (contentRefId);
+CREATE INDEX MoviesPrices_IDX_region ON MoviesPrices (region);
+
+CREATE INDEX SeriesPrices_IDX_content_id ON SeriesPrices (contentId);
+CREATE INDEX SeriesPrices_IDX_content_ref_id ON SeriesPrices (contentRefId);
+CREATE INDEX SeriesPrices_IDX_region ON SeriesPrices (region);
+
+
 DELIMITER //
-
--- drop all triggers
-CREATE PROCEDURE DropAllFunctions()
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE funcName VARCHAR(255);
-    DECLARE cur CURSOR FOR 
-        SELECT SPECIFIC_NAME 
-        FROM information_schema.ROUTINES 
-        WHERE ROUTINE_SCHEMA = DATABASE() 
-        AND ROUTINE_TYPE = 'FUNCTION'
-        AND SPECIFIC_NAME != 'DropAllFunctions';
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-    
-    OPEN cur;
-    read_loop: LOOP
-        FETCH NEXT FROM cur INTO funcName;
-        
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        SET @drop_func_sql = CONCAT('DROP FUNCTION IF EXISTS ', funcName);
-        PREPARE stmt FROM @drop_func_sql;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END LOOP;
-
-    CLOSE cur;
-END //
-
-CALL DropAllFunctions(); //
-
-
--- delete all triggers
-CREATE PROCEDURE DropAllTriggers()
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE triggerName VARCHAR(255);
-    DECLARE cur CURSOR FOR 
-        SELECT TRIGGER_NAME 
-        FROM information_schema.TRIGGERS 
-        WHERE TRIGGER_SCHEMA = DATABASE();
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-
-    OPEN cur;
-    read_loop: LOOP
-        FETCH NEXT FROM cur INTO triggerName;
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        SET @drop_trigger_sql = CONCAT('DROP TRIGGER IF EXISTS ', triggerName);
-        PREPARE stmt FROM @drop_trigger_sql;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-    END LOOP;
-
-    CLOSE cur;
-END //
-
-CALL DropAllTriggers(); //
 
 
 -- Base function for content JSON with common fields
@@ -2026,9 +1918,5 @@ BEGIN
     );
 END //
 
--- Remove the drop all procedures just to be safe
-DROP PROCEDURE IF EXISTS DropAllProcedures //
-DROP PROCEDURE IF EXISTS DropAllFunctions //
-DROP PROCEDURE IF EXISTS DropAllTriggers //
-DROP PROCEDURE IF EXISTS DropAllTables //
+CALL DropAllProcedures(); //
 DELIMITER ;

@@ -260,10 +260,12 @@ program
 			debug.log("Setup", "Database connection established");
 
 			// Read schema files
+			const dropPath = join(process.cwd(), "src", "sql", "drop.sql");
 			const schemaPath = join(process.cwd(), "src", "sql", "schema.sql");
 			const scraperPath = join(process.cwd(), "src", "sql", "scraper.sql");
 			debug.log("Setup", `Reading schema files: ${schemaPath}, ${scraperPath}`);
-			let schema = await fs.readFile(schemaPath, "utf8");
+			let schema = await fs.readFile(dropPath, "utf8");
+			schema += await fs.readFile(schemaPath, "utf8");
 			schema += await fs.readFile(scraperPath, "utf8");
 			debug.log("Setup", `Schema files read, total size: ${schema.length} chars`);
 
