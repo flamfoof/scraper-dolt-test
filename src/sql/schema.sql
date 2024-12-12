@@ -352,15 +352,17 @@ CREATE INDEX AuditLogContext_IDX USING BTREE ON AuditLog (appContext);
 DROP TABLE IF EXISTS Deeplinks;
 
 -- Indexes for better query performance
-CREATE INDEX MoviesTitle_IDX USING BTREE ON Movies (title);
+CREATE INDEX MoviesTitle_IDX USING FULLTEXT ON Movies (title);
 CREATE INDEX MoviesActive_IDX USING BTREE ON Movies (isActive);
 
-CREATE INDEX SeriesTitle_IDX USING BTREE ON Series (title);
+CREATE INDEX SeriesTitle_IDX USING FULLTEXT ON Series (title);
 CREATE INDEX SeriesActive_IDX USING BTREE ON Series (isActive);
 
+CREATE INDEX SeasonsTitle_IDX USING FULLTEXT ON Seasons (title);
 CREATE INDEX SeasonsShow_IDX USING BTREE ON Seasons (contentRefId, seasonNumber);
 CREATE INDEX SeasonsActive_IDX USING BTREE ON Seasons (isActive);
 
+CREATE INDEX EpisodesTitle_IDX USING FULLTEXT ON Episodes (title);
 CREATE INDEX EpisodesSeason_IDX USING BTREE ON Episodes (contentRefId);
 CREATE INDEX EpisodesActive_IDX USING BTREE ON Episodes (isActive);
 
