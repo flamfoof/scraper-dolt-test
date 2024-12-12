@@ -1887,6 +1887,11 @@ BEGIN
     );
 END //
 
+
+CALL DropAllProcedures(); //
+DROP PROCEDURE IF EXISTS DropAllProcedures; //
+
+
 -- Audit helper procedures and functions
 -- Central audit logging procedure
 CREATE PROCEDURE LogAudit(
@@ -1918,6 +1923,4 @@ BEGIN
     );
 END //
 
-CALL DropAllProcedures(); //
-DROP PROCEDURE IF EXISTS DropAllProcedures; //
 DELIMITER ;
