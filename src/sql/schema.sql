@@ -1919,4 +1919,5 @@ BEGIN
 END //
 
 CALL DropAllProcedures(); //
+DROP PROCEDURE IF EXISTS DropAllProcedures; //
 DELIMITER ;
