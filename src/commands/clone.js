@@ -13,7 +13,7 @@ program
 	.name("clone")
 	.description("Clone databases from source to destination")
 	.option("-d, --database <name>", "Specific database to clone")
-	.option("-b, --batch-size <size>", "Batch size for data transfer", "10000")
+	.option("-b, --batch-size <size>", "Batch size for data transfer", "1000")
 	.option("--dry-run", "Show what would be cloned without actually cloning")
 	.option("--direction <direction>", "Clone direction: local or master", "local")
 	.option("--force", "Force push from local to master without confirmation")

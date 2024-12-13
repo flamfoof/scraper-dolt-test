@@ -240,7 +240,6 @@ export class DatabaseManager {
 			// Prepare batch insert
 			if (rows.length > 0) {
 				const columns = Object.keys(rows[0]);
-
 				// Create value strings with actual values properly escaped
 				const valueStrings = rows.map((row) => {
 					const rowValues = columns.map((col) => {
@@ -250,7 +249,9 @@ export class DatabaseManager {
 						if (typeof value === "boolean") return value ? 1 : 0;
 						// Escape strings and handle dates
 						if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-							return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+							return `'${JSON.stringify(value)}'`;
+						} else if (value && typeof value === 'object' && Array.isArray(value)) {
+							return JSON.stringify(JSON.stringify(value));
 						}
 						if (value instanceof Date) return `'${value.toISOString().slice(0, 19).replace("T", " ")}'`;
 						return `'${String(value).replace(/'/g, "''")}'`;
