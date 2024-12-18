@@ -289,6 +289,29 @@ CREATE INDEX AuditLogContentIdRef_IDX USING BTREE ON AuditLog (contentIdRef, tab
 -- Drop old Deeplinks table
 DROP TABLE IF EXISTS Deeplinks;
 
+-- Graveyard table for tracking failed content and links
+CREATE TABLE Graveyard (
+    id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
+    contentId UUID NULL COMMENT 'Reference to the original content ID if available',
+    contentType ENUM('movie', 'series', 'season', 'episode', 'deeplink', 'price') NOT NULL,
+    sourceId VARCHAR(128) NULL COMMENT 'External ID from the source (e.g., TMDB ID, IMDB ID)',
+    sourceType VARCHAR(64) NULL COMMENT 'Source of the content (e.g., tmdb, imdb, reelgood)',
+    title VARCHAR(255) NULL COMMENT 'Original title of the content',
+    reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'other') NOT NULL,
+    details JSON NULL COMMENT 'Additional details about the failure',
+    rawData JSON NULL COMMENT 'Original raw data that failed to process',
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    createdBy VARCHAR(64) NULL COMMENT 'User or system that created this record',
+    CONSTRAINT PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Indexes for Graveyard table
+CREATE INDEX GraveyardContent_IDX USING BTREE ON Graveyard (contentId);
+CREATE INDEX GraveyardType_IDX USING BTREE ON Graveyard (contentType, sourceType);
+CREATE INDEX GraveyardSource_IDX USING BTREE ON Graveyard (sourceId, sourceType);
+CREATE INDEX GraveyardReason_IDX USING BTREE ON Graveyard (reason);
+CREATE INDEX GraveyardCreated_IDX USING BTREE ON Graveyard (createdAt);
+
 -- Indexes for better query performance
 CREATE FULLTEXT INDEX MoviesTitle_IDX ON Movies (title);
 CREATE INDEX MoviesContentId_IDX USING BTREE ON Movies (contentId);
@@ -798,14 +821,6 @@ BEGIN
     SET keys_array = JSON_KEYS(JSON_MERGE_PATCH(old_json, new_json));
     SET i = 0;
     
-    -- First, always include contentId if it exists in either JSON
-    SET old_value = JSON_EXTRACT(old_json, '$.contentId');
-    SET new_value = JSON_EXTRACT(new_json, '$.contentId');
-    IF old_value IS NOT NULL OR new_value IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.contentId', COALESCE(JSON_UNQUOTE(new_value), JSON_UNQUOTE(old_value)));
-    END IF;
-    
-    -- Then process all other fields
     WHILE i < JSON_LENGTH(keys_array) DO
         SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
             SET old_value = JSON_EXTRACT(old_json, CONCAT('$.', current_key));
