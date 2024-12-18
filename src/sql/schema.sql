@@ -1944,7 +1944,7 @@ FOR EACH ROW
 BEGIN
     DECLARE old_json, new_json, changed_json JSON;
     
-    SET old_json = GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive);
+    SET old_json = GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.buyUHD, OLD.rentSD, OLD.rentHD, OLD.rentUHD, OLD.seriesBuySD, OLD.seriesBuyHD, OLD.seriesBuyUHD, OLD.seriesRentSD, OLD.seriesRentHD, OLD.seriesRentUHD, OLD.seasonBuySD, OLD.seasonBuyHD, OLD.seasonBuyUHD, OLD.seasonRentSD, OLD.seasonRentHD, OLD.seasonRentUHD, OLD.isActive);
     
     SET new_json = GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive);
     
