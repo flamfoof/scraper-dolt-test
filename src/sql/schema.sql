@@ -782,35 +782,46 @@ BEGIN
 END //
 
 -- Function to get only changed fields between two JSON objects
-CREATE FUNCTION GetChangedFieldsJSON(old_json JSON, new_json JSON)
-RETURNS JSON
+CREATE FUNCTION GetChangedFieldsJSON(
+    old_json JSON,
+    new_json JSON
+) RETURNS JSON
 DETERMINISTIC
 BEGIN
-    DECLARE result, keys_array TEXT;
+    DECLARE result JSON;
+    DECLARE keys_array JSON;
     DECLARE i INT;
     DECLARE current_key TEXT;
     DECLARE old_value, new_value TEXT;
     
-    SET result = '{}';
-    SET keys_array = JSON_KEYS(new_json);
+    SET result = JSON_OBJECT();
+    SET keys_array = JSON_KEYS(JSON_MERGE_PATCH(old_json, new_json));
     SET i = 0;
     
+    -- First, always include contentId if it exists in either JSON
+    SET old_value = JSON_EXTRACT(old_json, '$.contentId');
+    SET new_value = JSON_EXTRACT(new_json, '$.contentId');
+    IF old_value IS NOT NULL OR new_value IS NOT NULL THEN
+        SET result = JSON_SET(result, '$.contentId', COALESCE(JSON_UNQUOTE(new_value), JSON_UNQUOTE(old_value)));
+    END IF;
+    
+    -- Then process all other fields
     WHILE i < JSON_LENGTH(keys_array) DO
         SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
-        SET old_value = JSON_EXTRACT(old_json, CONCAT('$.', current_key));
-        SET new_value = JSON_EXTRACT(new_json, CONCAT('$.', current_key));
-        
-        -- Unquote the values for comparison if they're not NULL
-        IF old_value IS NOT NULL THEN
-            SET old_value = JSON_UNQUOTE(old_value);
-        END IF;
-        IF new_value IS NOT NULL THEN
-            SET new_value = JSON_UNQUOTE(new_value);
-        END IF;
-        
-        IF (old_value IS NULL AND new_value IS NOT NULL) OR 
-           (old_value IS NOT NULL AND new_value IS NULL) OR 
-           (old_value <> new_value) THEN
+            SET old_value = JSON_EXTRACT(old_json, CONCAT('$.', current_key));
+            SET new_value = JSON_EXTRACT(new_json, CONCAT('$.', current_key));
+            
+            -- Unquote the values for comparison if they're not NULL
+            IF old_value IS NOT NULL THEN
+                SET old_value = JSON_UNQUOTE(old_value);
+            END IF;
+            IF new_value IS NOT NULL THEN
+                SET new_value = JSON_UNQUOTE(new_value);
+            END IF;
+            
+            IF (old_value IS NULL AND new_value IS NOT NULL) OR 
+               (old_value IS NOT NULL AND new_value IS NULL) OR 
+               (old_value <> new_value) THEN
             -- Use JSON_MERGE_PATCH to combine the existing result with a new JSON_OBJECT
             SET result = JSON_MERGE_PATCH(
                 result,
