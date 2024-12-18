@@ -270,8 +270,8 @@ CREATE TABLE SeriesPrices (
 -- Audit Log for tracking all significant changes
 CREATE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    tableName VARCHAR(64) NOT NULL,
     contentIdRef UUID NULL COMMENT 'Reference to the content being audited',
+    tableName VARCHAR(64) NOT NULL,
     action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
     username VARCHAR(64) NULL COMMENT 'Username of who made the change',
     appContext ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user') NOT NULL DEFAULT 'system',
