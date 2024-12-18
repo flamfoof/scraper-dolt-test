@@ -271,6 +271,7 @@ CREATE TABLE SeriesPrices (
 CREATE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     tableName VARCHAR(64) NOT NULL,
+    contentIdRef UUID NULL COMMENT 'Reference to the content being audited',
     action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
     username VARCHAR(64) NULL COMMENT 'Username of who made the change',
     appContext ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user') NOT NULL DEFAULT 'system',
@@ -283,6 +284,7 @@ CREATE TABLE AuditLog (
 CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
 CREATE INDEX AuditLogUser_IDX USING BTREE ON AuditLog (username);
 CREATE INDEX AuditLogContext_IDX USING BTREE ON AuditLog (appContext);
+CREATE INDEX AuditLogContentIdRef_IDX USING BTREE ON AuditLog (contentIdRef, tableName);
 
 -- Drop old Deeplinks table
 DROP TABLE IF EXISTS Deeplinks;
@@ -829,10 +831,14 @@ BEGIN
     DECLARE display_title VARCHAR(255);
     SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    CALL LogAudit('Movies', NEW.contentId, 'insert', NULL,
+    CALL LogAudit(
+        'Movies', 
+        NEW.contentId, 
+        'insert',
+        NULL,
         GetContentJSON(
             NEW.contentId, 
-            display_title,  -- Use display title
+            display_title,
             NEW.tmdbId, 
             NEW.imdbId, 
             NEW.rgId, 
@@ -861,7 +867,7 @@ BEGIN
     
     SET old_json = GetContentJSON(
         OLD.contentId, 
-        old_display_title,  -- Use old display title
+        old_display_title,
         OLD.tmdbId, 
         OLD.imdbId, 
         OLD.rgId, 
@@ -876,7 +882,7 @@ BEGIN
     
     SET new_json = GetContentJSON(
         NEW.contentId, 
-        new_display_title,  -- Use new display title
+        new_display_title,
         NEW.tmdbId, 
         NEW.imdbId, 
         NEW.rgId, 
@@ -892,7 +898,10 @@ BEGIN
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('Movies', NEW.contentId, 'update',
+        CALL LogAudit(
+            'Movies',
+            NEW.contentId,
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -905,10 +914,13 @@ CREATE TRIGGER Movies_Delete_Audit
 AFTER DELETE ON Movies
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Movies', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'Movies',
+        OLD.contentId,
+        'delete',
         GetContentJSON(
             OLD.contentId, 
-            GetDisplayTitle(OLD.title, OLD.altTitle),  -- Use display title
+            GetDisplayTitle(OLD.title, OLD.altTitle),
             OLD.tmdbId, 
             OLD.imdbId, 
             OLD.rgId, 
@@ -934,10 +946,14 @@ BEGIN
     DECLARE display_title VARCHAR(255);
     SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    CALL LogAudit('Series', NEW.contentId, 'insert', NULL,
+    CALL LogAudit(
+        'Series',
+        NEW.contentId,
+        'insert',
+        NULL,
         GetContentJSON(
             NEW.contentId, 
-            display_title,  -- Use display title
+            display_title,
             NEW.tmdbId, 
             NEW.imdbId, 
             NEW.rgId, 
@@ -966,7 +982,7 @@ BEGIN
     
     SET old_json = GetContentJSON(
         OLD.contentId, 
-        old_display_title,  -- Use old display title
+        old_display_title,
         OLD.tmdbId, 
         OLD.imdbId, 
         OLD.rgId, 
@@ -981,7 +997,7 @@ BEGIN
     
     SET new_json = GetContentJSON(
         NEW.contentId, 
-        new_display_title,  -- Use new display title
+        new_display_title,
         NEW.tmdbId, 
         NEW.imdbId, 
         NEW.rgId, 
@@ -997,7 +1013,10 @@ BEGIN
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('Series', NEW.contentId, 'update',
+        CALL LogAudit(
+            'Series',
+            NEW.contentId,
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -1010,10 +1029,13 @@ CREATE TRIGGER Series_Delete_Audit
 AFTER DELETE ON Series
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Series', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'Series',
+        OLD.contentId,
+        'delete',
         GetContentJSON(
             OLD.contentId, 
-            GetDisplayTitle(OLD.title, OLD.altTitle),  -- Use display title
+            GetDisplayTitle(OLD.title, OLD.altTitle),
             OLD.tmdbId, 
             OLD.imdbId, 
             OLD.rgId, 
@@ -1051,7 +1073,10 @@ BEGIN
         NEW.isActive
     );
     
-    CALL LogAudit('Seasons', NEW.contentId, 'insert',
+    CALL LogAudit(
+        'Seasons', 
+        NEW.contentId, 
+        'insert',
         NULL,
         season_json,
         COALESCE(@username, 'system'),
@@ -1097,7 +1122,10 @@ BEGIN
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('Seasons', NEW.contentId, 'update',
+        CALL LogAudit(
+            'Seasons', 
+            NEW.contentId, 
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -1125,7 +1153,10 @@ BEGIN
         OLD.isActive
     );
     
-    CALL LogAudit('Seasons', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'Seasons', 
+        OLD.contentId, 
+        'delete',
         season_json,
         NULL,
         COALESCE(@username, 'system'),
@@ -1138,7 +1169,10 @@ CREATE TRIGGER Episodes_Insert_Audit
 AFTER INSERT ON Episodes
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Episodes', NEW.contentId, 'insert',
+    CALL LogAudit(
+        'Episodes', 
+        NEW.contentId, 
+        'insert',
         NULL,
         GetEpisodeJSON(
             NEW.contentId,
@@ -1207,7 +1241,10 @@ BEGIN
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('Episodes', NEW.contentId, 'update',
+        CALL LogAudit(
+            'Episodes', 
+            NEW.contentId, 
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -1220,7 +1257,10 @@ CREATE TRIGGER Episodes_Delete_Audit
 AFTER DELETE ON Episodes
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('Episodes', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'Episodes', 
+        OLD.contentId, 
+        'delete',
         GetEpisodeJSON(
             OLD.contentId,
             OLD.contentRefId,
@@ -1413,7 +1453,11 @@ BEGIN
         SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     END IF;
     
-    CALL LogAudit('MoviesDeeplinks', NEW.contentId, 'insert', NULL,
+    CALL LogAudit(
+        'MoviesDeeplinks', 
+        NEW.contentId, 
+        'insert', 
+        NULL,
         GetDeeplinkJSON(
             NEW.contentId, 
             NEW.contentRefId, 
@@ -1494,7 +1538,10 @@ BEGIN
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('MoviesDeeplinks', NEW.contentId, 'update',
+        CALL LogAudit(
+            'MoviesDeeplinks', 
+            NEW.contentId, 
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -1510,7 +1557,10 @@ BEGIN
     DECLARE display_title VARCHAR(255);
     SET display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     
-    CALL LogAudit('MoviesDeeplinks', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'MoviesDeeplinks', 
+        OLD.contentId, 
+        'delete',
         GetDeeplinkJSON(
             OLD.contentId, 
             OLD.contentRefId, 
@@ -1579,7 +1629,11 @@ BEGIN
         SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     END IF;
     
-    CALL LogAudit('SeriesDeeplinks', NEW.contentId, 'insert', NULL,
+    CALL LogAudit(
+        'SeriesDeeplinks', 
+        NEW.contentId, 
+        'insert', 
+        NULL,
         GetDeeplinkJSON(
             NEW.contentId, 
             NEW.contentRefId, 
@@ -1660,7 +1714,10 @@ BEGIN
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('SeriesDeeplinks', NEW.contentId, 'update',
+        CALL LogAudit(
+            'SeriesDeeplinks', 
+            NEW.contentId, 
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -1676,7 +1733,10 @@ BEGIN
     DECLARE display_title VARCHAR(255);
     SET display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     
-    CALL LogAudit('SeriesDeeplinks', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'SeriesDeeplinks', 
+        OLD.contentId, 
+        'delete',
         GetDeeplinkJSON(
             OLD.contentId, 
             OLD.contentRefId, 
@@ -1708,7 +1768,11 @@ CREATE TRIGGER MoviesPrices_Insert_Audit
 AFTER INSERT ON MoviesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('MoviesPrices', NEW.contentId, 'insert', NULL,
+    CALL LogAudit(
+        'MoviesPrices', 
+        NEW.contentId, 
+        'insert',
+        NULL,
         GetPriceJSON(
             NEW.contentId,
             NEW.contentRefId,
@@ -1797,7 +1861,10 @@ BEGIN
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('MoviesPrices', NEW.contentId, 'update',
+        CALL LogAudit(
+            'MoviesPrices', 
+            NEW.contentId, 
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -1810,7 +1877,10 @@ CREATE TRIGGER MoviesPrices_Delete_Audit
 AFTER DELETE ON MoviesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('MoviesPrices', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'MoviesPrices', 
+        OLD.contentId, 
+        'delete',
         GetPriceJSON(
             OLD.contentId,
             OLD.contentRefId,
@@ -1846,7 +1916,11 @@ CREATE TRIGGER SeriesPrices_Insert_Audit
 AFTER INSERT ON SeriesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('SeriesPrices', NEW.contentId, 'insert', NULL,
+    CALL LogAudit(
+        'SeriesPrices', 
+        NEW.contentId, 
+        'insert',
+        NULL,
         GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -1859,14 +1933,17 @@ FOR EACH ROW
 BEGIN
     DECLARE old_json, new_json, changed_json JSON;
     
-    SET old_json = GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.buyUHD, OLD.rentSD, OLD.rentHD, OLD.rentUHD, OLD.seriesBuySD, OLD.seriesBuyHD, OLD.seriesBuyUHD, OLD.seriesRentSD, OLD.seriesRentHD, OLD.seriesRentUHD, OLD.seasonBuySD, OLD.seasonBuyHD, OLD.seasonBuyUHD, OLD.seasonRentSD, OLD.seasonRentHD, OLD.seasonRentUHD, OLD.isActive);
+    SET old_json = GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive);
     
     SET new_json = GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive);
     
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit('SeriesPrices', NEW.contentId, 'update',
+        CALL LogAudit(
+            'SeriesPrices', 
+            NEW.contentId, 
+            'update',
             old_json,
             changed_json,
             COALESCE(@username, 'system'),
@@ -1879,7 +1956,10 @@ CREATE TRIGGER SeriesPrices_Delete_Audit
 AFTER DELETE ON SeriesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit('SeriesPrices', OLD.contentId, 'delete',
+    CALL LogAudit(
+        'SeriesPrices', 
+        OLD.contentId, 
+        'delete',
         GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.buyUHD, OLD.rentSD, OLD.rentHD, OLD.rentUHD, OLD.seriesBuySD, OLD.seriesBuyHD, OLD.seriesBuyUHD, OLD.seriesRentSD, OLD.seriesRentHD, OLD.seriesRentUHD, OLD.seasonBuySD, OLD.seasonBuyHD, OLD.seasonBuyUHD, OLD.seasonRentSD, OLD.seasonRentHD, OLD.seasonRentUHD, OLD.isActive),
         NULL,
         COALESCE(@username, 'system'),
@@ -1896,7 +1976,7 @@ DROP PROCEDURE IF EXISTS DropAllProcedures; //
 -- Central audit logging procedure
 CREATE PROCEDURE LogAudit(
     IN tableName VARCHAR(64),
-    IN recordId UUID,
+    IN contentIdRef UUID,
     IN actionType ENUM('insert', 'update', 'delete', 'restore'),
     IN oldData JSON,
     IN newData JSON,
@@ -1906,6 +1986,7 @@ CREATE PROCEDURE LogAudit(
 BEGIN
     INSERT INTO AuditLog (
         id,
+        contentIdRef,
         tableName,
         action,
         username,
@@ -1914,6 +1995,7 @@ BEGIN
         newData
     ) VALUES (
         UUID_v7(),
+        contentIdRef,
         tableName,
         actionType,
         IFNULL(username, 'system'),
