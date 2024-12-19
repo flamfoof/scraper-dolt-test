@@ -450,6 +450,125 @@ DELIMITER ;
 -- Example usage:
 CALL TestTableUpdatesWithCount(5);
 
+-- Test partial content deletion
+DELIMITER //
+
+CREATE PROCEDURE TestPartialDeletion()
+BEGIN
+    -- Declare variables for test data
+    DECLARE series_id1 UUID;
+    DECLARE series_id2 UUID;
+    DECLARE season_id1 UUID;
+    DECLARE season_id2 UUID;
+    DECLARE episode_id1 UUID;
+    DECLARE episode_id2 UUID;
+    DECLARE deeplink_id1 UUID;
+    DECLARE deeplink_id2 UUID;
+    
+    -- Start transaction
+    START TRANSACTION;
+    
+    -- Create test data: 2 series, each with 1 season and 1 episode
+    SET series_id1 = UUID_v7();
+    SET series_id2 = UUID_v7();
+    
+    -- Insert two test series
+    INSERT INTO Series (contentId, title, isActive)
+    VALUES 
+        (series_id1, 'Test Series 1', true),
+        (series_id2, 'Test Series 2', true);
+    
+    -- Insert seasons
+    SET season_id1 = UUID_v7();
+    SET season_id2 = UUID_v7();
+    
+    INSERT INTO Seasons (contentId, contentRefId, title, seasonNumber)
+    VALUES 
+        (season_id1, series_id1, 'Season 1 of Series 1', 1),
+        (season_id2, series_id2, 'Season 1 of Series 2', 1);
+    
+    -- Insert episodes
+    SET episode_id1 = UUID_v7();
+    SET episode_id2 = UUID_v7();
+    
+    INSERT INTO Episodes (contentId, contentRefId, title, episodeNumber)
+    VALUES 
+        (episode_id1, season_id1, 'Episode 1 of Season 1 Series 1', 1),
+        (episode_id2, season_id2, 'Episode 1 of Season 1 Series 2', 1);
+    
+    -- Insert deeplinks
+    SET deeplink_id1 = UUID_v7();
+    SET deeplink_id2 = UUID_v7();
+    
+    INSERT INTO SeriesDeeplinks (contentId, contentRefId, sourceId, sourceType, title)
+    VALUES 
+        (deeplink_id1, episode_id1, 1, 'netflix', 'Netflix Link 1'),
+        (deeplink_id2, episode_id2, 1, 'netflix', 'Netflix Link 2');
+    
+    -- Verify initial state
+    -- SELECT COUNT(*) = 2 INTO @test_result FROM Series;
+    -- CALL AssertTrue(@test_result, 'Should have 2 series');
+    
+    -- SELECT COUNT(*) = 2 INTO @test_result FROM Seasons;
+    -- CALL AssertTrue(@test_result, 'Should have 2 seasons');
+    
+    -- SELECT COUNT(*) = 2 INTO @test_result FROM Episodes;
+    -- CALL AssertTrue(@test_result, 'Should have 2 episodes');
+    
+    -- SELECT COUNT(*) = 2 INTO @test_result FROM SeriesDeeplinks;
+    -- CALL AssertTrue(@test_result, 'Should have 2 deeplinks');
+    
+    -- Delete one series (should cascade to its season, episode, and deeplink)
+    DELETE FROM Series WHERE contentId = series_id1;
+    
+    -- Verify series 1 and its children are deleted
+    -- SELECT COUNT(*) = 0 INTO @test_result FROM Series WHERE contentId = series_id1;
+    -- CALL AssertTrue(@test_result, 'Series 1 should be deleted');
+    
+    -- SELECT COUNT(*) = 0 INTO @test_result FROM Seasons WHERE contentRefId = series_id1;
+    -- CALL AssertTrue(@test_result, 'Season from Series 1 should be deleted');
+    
+    -- SELECT COUNT(*) = 0 INTO @test_result FROM Episodes WHERE contentRefId = season_id1;
+    -- CALL AssertTrue(@test_result, 'Episode from Series 1 should be deleted');
+    
+    -- SELECT COUNT(*) = 0 INTO @test_result FROM SeriesDeeplinks WHERE contentRefId = episode_id1;
+    -- CALL AssertTrue(@test_result, 'Deeplink from Series 1 should be deleted');
+    
+    -- -- Verify series 2 and its children still exist
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM Series WHERE contentId = series_id2;
+    -- CALL AssertTrue(@test_result, 'Series 2 should still exist');
+    
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM Seasons WHERE contentRefId = series_id2;
+    -- CALL AssertTrue(@test_result, 'Season from Series 2 should still exist');
+    
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM Episodes WHERE contentRefId = season_id2;
+    -- CALL AssertTrue(@test_result, 'Episode from Series 2 should still exist');
+    
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM SeriesDeeplinks WHERE contentRefId = episode_id2;
+    -- CALL AssertTrue(@test_result, 'Deeplink from Series 2 should still exist');
+    
+    -- -- Verify Graveyard entries
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = series_id1 AND contentType = 'Series';
+    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted series');
+    
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = season_id1 AND contentType = 'Seasons';
+    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted season');
+    
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = episode_id1 AND contentType = 'Episodes';
+    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted episode');
+    
+    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = deeplink_id1 AND contentType = 'SeriesDeeplinks';
+    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted deeplink');
+    
+    -- Cleanup
+    -- ROLLBACK;
+END //
+
+DELIMITER ;
+
+-- Run the test
+CALL TestPartialDeletion();
+
 -- Switch to Scrapers database for test data generation
 USE Scrapers;
 
