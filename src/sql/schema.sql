@@ -139,12 +139,12 @@ CREATE TABLE MoviesDeeplinks (
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     contentRefId UUID NULL COMMENT 'Reference to Movies.contentId',
     tmdbId VARCHAR(20) NULL,
+    sourceId SMALLINT UNSIGNED NOT NULL,
+    sourceType VARCHAR(64) NOT NULL,
     title VARCHAR(255) NULL COMMENT 'This is the title scraped from the scraper',
     altTitle VARCHAR(255) NULL COMMENT 'If set, this will override the scrapers title, use it to match the TMDB title',
     releaseDate DATE NULL,
     altReleaseDate DATE NULL COMMENT 'If set, this will override the scrapers release date, use it to match the TMDB title',
-    sourceId SMALLINT UNSIGNED NOT NULL,
-    sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     -- Platform specific links
@@ -173,12 +173,12 @@ CREATE TABLE SeriesDeeplinks (
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     contentRefId UUID NULL COMMENT 'Reference to Episodes.contentId',
     tmdbId VARCHAR(20) NULL,
+    sourceId SMALLINT UNSIGNED NOT NULL,
+    sourceType VARCHAR(64) NOT NULL,
     title VARCHAR(255) NULL COMMENT 'This is the title scraped from the scraper',
     altTitle VARCHAR(255) NULL COMMENT 'If set, this will override the scrapers title, use it to match the TMDB title',
     releaseDate DATE NULL,
     altReleaseDate DATE NULL COMMENT 'If set, this will override the scrapers release date, use it to match the TMDB title',
-    sourceId SMALLINT UNSIGNED NOT NULL,
-    sourceType VARCHAR(64) NOT NULL,
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     -- Platform specific links
@@ -941,7 +941,7 @@ BEGIN
 END //
 
 CREATE TRIGGER Movies_Delete_Audit
-AFTER DELETE ON Movies
+BEFORE DELETE ON Movies
 FOR EACH ROW
 BEGIN
     -- Add to Graveyard
@@ -1105,7 +1105,7 @@ BEGIN
 END //
 
 CREATE TRIGGER Series_Delete_Audit
-AFTER DELETE ON Series
+BEFORE DELETE ON Series
 FOR EACH ROW
 BEGIN
     -- Add to Graveyard
@@ -1265,7 +1265,7 @@ BEGIN
 END //
 
 CREATE TRIGGER Seasons_Delete_Audit
-AFTER DELETE ON Seasons
+BEFORE DELETE ON Seasons
 FOR EACH ROW
 BEGIN
     -- Log audit
@@ -1421,7 +1421,7 @@ BEGIN
 END //
 
 CREATE TRIGGER Episodes_Delete_Audit
-AFTER DELETE ON Episodes
+BEFORE DELETE ON Episodes
 FOR EACH ROW
 BEGIN
     -- Log audit
@@ -1762,7 +1762,7 @@ BEGIN
 END //
 
 CREATE TRIGGER MoviesDeeplinks_Delete_Audit
-AFTER DELETE ON MoviesDeeplinks
+BEFORE DELETE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
@@ -1987,7 +1987,7 @@ BEGIN
 END //
 
 CREATE TRIGGER SeriesDeeplinks_Delete_Audit
-AFTER DELETE ON SeriesDeeplinks
+BEFORE DELETE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
@@ -2183,7 +2183,7 @@ BEGIN
 END //
 
 CREATE TRIGGER MoviesPrices_Delete_Audit
-AFTER DELETE ON MoviesPrices
+BEFORE DELETE ON MoviesPrices
 FOR EACH ROW
 BEGIN
     CALL LogAudit(
@@ -2300,7 +2300,7 @@ BEGIN
 END //
 
 CREATE TRIGGER SeriesPrices_Delete_Audit
-AFTER DELETE ON SeriesPrices
+BEFORE DELETE ON SeriesPrices
 FOR EACH ROW
 BEGIN
     CALL LogAudit(
