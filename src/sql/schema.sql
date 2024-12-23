@@ -85,7 +85,7 @@ CREATE TABLE Series (
 CREATE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    contentRefId UUID NOT NULL COMMENT 'Reference to Series.contentId',
+    contentRefId UUID NULL COMMENT 'Reference to Series.contentId',
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NULL,
     description TEXT NULL,
@@ -102,19 +102,20 @@ CREATE TABLE Seasons (
     CONSTRAINT SeasonsUuid_UK UNIQUE KEY (contentId),
     CONSTRAINT SeasonsNumber_UK UNIQUE KEY (contentRefId, seasonNumber),
     CONSTRAINT SeasonsSeries_FK FOREIGN KEY (contentRefId) 
-        REFERENCES Series(contentId) ON DELETE CASCADE
+        REFERENCES Series(contentId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episodes table
 CREATE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    contentRefId UUID NOT NULL COMMENT 'Reference to Seasons.contentId',
+    contentRefId UUID NULL COMMENT 'Reference to Seasons.contentId',
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NOT NULL,
+    altTitle VARCHAR(255) NULL,
     description TEXT NULL,
     episodeNumber SMALLINT DEFAULT -1 NOT NULL,
     runtime SMALLINT UNSIGNED NULL COMMENT 'Runtime in minutes',
@@ -130,7 +131,7 @@ CREATE TABLE Episodes (
     CONSTRAINT EpisodesUuid_UK UNIQUE KEY (contentId),
     CONSTRAINT EpisodesNumber_UK UNIQUE KEY (contentRefId, episodeNumber),
     CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
-        REFERENCES Seasons(contentId) ON DELETE CASCADE
+        REFERENCES Seasons(contentId) 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movie Deeplinks table for storing platform-specific movie links
@@ -164,7 +165,7 @@ CREATE TABLE MoviesDeeplinks (
     CONSTRAINT MoviesDeeplinksContent_UK UNIQUE KEY (contentId),
     CONSTRAINT MoviesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
     CONSTRAINT MoviesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
-        REFERENCES Movies(contentId) ON DELETE CASCADE
+        REFERENCES Movies(contentId) 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episode Deeplinks table for storing platform-specific episode links
@@ -198,7 +199,7 @@ CREATE TABLE SeriesDeeplinks (
     CONSTRAINT SeriesDeeplinksContent_UK UNIQUE KEY (contentId),
     CONSTRAINT SeriesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
     CONSTRAINT SeriesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
-        REFERENCES Episodes(contentId) ON DELETE CASCADE
+        REFERENCES Episodes(contentId) 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movies Prices table for storing movie pricing information
@@ -223,7 +224,6 @@ CREATE TABLE MoviesPrices (
     CONSTRAINT MoviesPricesDeeplinks_FK
         FOREIGN KEY (contentRefId)
         REFERENCES MoviesDeeplinks (contentId)
-        ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episodes Prices table for storing TV content pricing information
@@ -264,13 +264,12 @@ CREATE TABLE SeriesPrices (
     CONSTRAINT SeriesPricesDeeplinks_FK
         FOREIGN KEY (contentRefId)
         REFERENCES SeriesDeeplinks (contentId)
-        ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Audit Log for tracking all significant changes
 CREATE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    contentIdRef UUID NULL COMMENT 'Reference to the content being audited',
+    contentRefId UUID NULL COMMENT 'Reference to the content being audited',
     tableName VARCHAR(64) NOT NULL,
     action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
     username VARCHAR(64) NULL COMMENT 'Username of who made the change',
@@ -284,7 +283,7 @@ CREATE TABLE AuditLog (
 CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
 CREATE INDEX AuditLogUser_IDX USING BTREE ON AuditLog (username);
 CREATE INDEX AuditLogContext_IDX USING BTREE ON AuditLog (appContext);
-CREATE INDEX AuditLogContentIdRef_IDX USING BTREE ON AuditLog (contentIdRef, tableName);
+CREATE INDEX AuditLogcontentRefId_IDX USING BTREE ON AuditLog (contentRefId, tableName);
 
 -- Drop old Deeplinks table
 DROP TABLE IF EXISTS Deeplinks;
@@ -292,7 +291,7 @@ DROP TABLE IF EXISTS Deeplinks;
 -- Graveyard table for tracking failed content and links
 CREATE TABLE Graveyard (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    contentId UUID NULL COMMENT 'Reference to the original content ID if available',
+    contentRefId UUID NULL COMMENT 'Reference to the original content ID if available',
     reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other') NOT NULL,
     contentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices') NOT NULL,
     sourceId VARCHAR(128) NULL COMMENT 'External ID from the source (e.g., TMDB ID, IMDB ID)',
@@ -306,7 +305,7 @@ CREATE TABLE Graveyard (
     CONSTRAINT GraveyardUnique_UK UNIQUE KEY (
         contentType,
         reason,
-        contentId,
+        contentRefId,
         sourceId,
         sourceType
     )
@@ -732,6 +731,7 @@ CREATE FUNCTION GetEpisodeJSON(
     p_imdbId VARCHAR(20),
     p_rgId VARCHAR(128),
     p_title VARCHAR(255),
+    p_altTitle VARCHAR(255),
     p_description TEXT,
     p_episodeNumber SMALLINT,
     p_runtime SMALLINT UNSIGNED,
@@ -767,6 +767,10 @@ BEGIN
 
     IF p_rgId IS NOT NULL THEN
         SET result = JSON_SET(result, '$.rgId', p_rgId);
+    END IF;
+
+    IF p_altTitle IS NOT NULL THEN
+        SET result = JSON_SET(result, '$.altTitle', p_altTitle);
     END IF;
 
     IF p_description IS NOT NULL THEN
@@ -855,7 +859,7 @@ END //
 
 -- Movies triggers
 CREATE TRIGGER Movies_Insert_Audit
-AFTER INSERT ON Movies
+BEFORE INSERT ON Movies
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
@@ -944,82 +948,35 @@ CREATE TRIGGER Movies_Delete_Audit
 BEFORE DELETE ON Movies
 FOR EACH ROW
 BEGIN
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
+    CALL MoviesDeleteAudit(
         OLD.contentId,
-        'Movies',
         OLD.tmdbId,
-        'tmdb',
+        OLD.imdbId,
+        OLD.rgId,
         OLD.title,
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'tmdbId', OLD.tmdbId,
-            'imdbId', OLD.imdbId,
-            'rgId', OLD.rgId,
-            'title', OLD.title,
-            'altTitle', OLD.altTitle,
-            'description', OLD.description,
-            'runtime', OLD.runtime,
-            'releaseDate', OLD.releaseDate,
-            'posterPath', OLD.posterPath,
-            'backdropPath', OLD.backdropPath,
-            'popularity', OLD.popularity,
-            'voteAverage', OLD.voteAverage,
-            'voteCount', OLD.voteCount,
-            'genres', OLD.genres,
-            'keywords', OLD.keywords,
-            'cast', OLD.cast,
-            'crew', OLD.crew,
-            'productionCompanies', OLD.productionCompanies,
-            'isActive', OLD.isActive,
-            'isDupe', OLD.isDupe
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
-
-    -- Log audit
-    CALL LogAudit(
-        'Movies',
-        OLD.contentId,
-        'delete',
-        GetContentJSON(
-            OLD.contentId, 
-            GetDisplayTitle(OLD.title, OLD.altTitle),
-            OLD.tmdbId, 
-            OLD.imdbId, 
-            OLD.rgId, 
-            OLD.description, 
-            OLD.releaseDate, 
-            OLD.posterPath, 
-            OLD.backdropPath, 
-            OLD.voteAverage, 
-            OLD.voteCount, 
-            OLD.isActive
-        ),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.altTitle,
+        OLD.description,
+        OLD.runtime,
+        OLD.releaseDate,
+        OLD.posterPath,
+        OLD.backdropPath,
+        OLD.popularity,
+        OLD.voteAverage,
+        OLD.voteCount,
+        OLD.genres,
+        OLD.keywords,
+        OLD.cast,
+        OLD.crew,
+        OLD.productionCompanies,
+        OLD.isActive,
+        OLD.isDupe,
+        @graveyard_id
     );
 END //
 
 -- Series triggers
 CREATE TRIGGER Series_Insert_Audit
-AFTER INSERT ON Series
+BEFORE INSERT ON Series
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
@@ -1108,107 +1065,63 @@ CREATE TRIGGER Series_Delete_Audit
 BEFORE DELETE ON Series
 FOR EACH ROW
 BEGIN
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
+    DECLARE v_graveyard_id UUID;
+    CALL SeriesDeleteAudit(
         OLD.contentId,
-        'Series',
-        OLD.tmdbId,
-        'tmdb',
         OLD.title,
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'tmdbId', OLD.tmdbId,
-            'imdbId', OLD.imdbId,
-            'rgId', OLD.rgId,
-            'title', OLD.title,
-            'altTitle', OLD.altTitle,
-            'description', OLD.description,
-            'releaseDate', OLD.releaseDate,
-            'posterPath', OLD.posterPath,
-            'backdropPath', OLD.backdropPath,
-            'popularity', OLD.popularity,
-            'voteAverage', OLD.voteAverage,
-            'voteCount', OLD.voteCount,
-            'genres', OLD.genres,
-            'keywords', OLD.keywords,
-            'cast', OLD.cast,
-            'crew', OLD.crew,
-            'productionCompanies', OLD.productionCompanies,
-            'networks', OLD.networks,
-            'totalSeasons', OLD.totalSeasons,
-            'totalEpisodes', OLD.totalEpisodes,
-            'isActive', OLD.isActive,
-            'isDupe', OLD.isDupe
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
-
-    -- Log audit
-    CALL LogAudit(
-        'Series',
-        OLD.contentId,
-        'delete',
-        GetContentJSON(
-            OLD.contentId,
-            GetDisplayTitle(OLD.title, OLD.altTitle),
-            OLD.tmdbId,
-            OLD.imdbId,
-            OLD.rgId,
-            OLD.description,
-            OLD.releaseDate,
-            OLD.posterPath,
-            OLD.backdropPath,
-            OLD.voteAverage,
-            OLD.voteCount,
-            OLD.isActive
-        ),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.altTitle,
+        OLD.tmdbId,
+        OLD.imdbId,
+        OLD.rgId,
+        OLD.description,
+        OLD.releaseDate,
+        OLD.posterPath,
+        OLD.backdropPath,
+        OLD.popularity,
+        OLD.voteAverage,
+        OLD.voteCount,
+        OLD.genres,
+        OLD.keywords,
+        OLD.cast,
+        OLD.crew,
+        OLD.productionCompanies,
+        OLD.networks,
+        OLD.totalSeasons,
+        OLD.totalEpisodes,
+        OLD.isActive,
+        v_graveyard_id
     );
 END //
 
 -- Seasons triggers
 CREATE TRIGGER Seasons_Insert_Audit
-AFTER INSERT ON Seasons
+BEFORE INSERT ON Seasons
 FOR EACH ROW
 BEGIN
-    DECLARE season_json JSON;
-    SET season_json = GetSeasonJSON(
-        NEW.contentId,
-        NEW.contentRefId,
-        NEW.title,
-        NEW.description,
-        NEW.seasonNumber,
-        NEW.episodeCount,
-        NEW.releaseDate,
-        NEW.posterPath,
-        NEW.voteAverage,
-        NEW.voteCount,
-        NEW.isActive
-    );
-    
+    -- Update total seasons in Series
+    UPDATE Series 
+    SET totalSeasons = totalSeasons + 1
+    WHERE contentId = NEW.contentRefId;
+
+    -- Log the audit
     CALL LogAudit(
         'Seasons', 
         NEW.contentId, 
-        'insert',
+        'insert', 
         NULL,
-        season_json,
+        GetSeasonJSON(
+            NEW.contentId,
+            NEW.contentRefId,
+            NEW.title,
+            NEW.description,
+            NEW.seasonNumber,
+            NEW.episodeCount,
+            NEW.releaseDate,
+            NEW.posterPath,
+            NEW.voteAverage,
+            NEW.voteCount,
+            NEW.isActive
+        ),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1268,77 +1181,61 @@ CREATE TRIGGER Seasons_Delete_Audit
 BEFORE DELETE ON Seasons
 FOR EACH ROW
 BEGIN
-    -- Log audit
-    CALL LogAudit(
-        'Seasons',
-        OLD.contentId,
-        'delete',
-        GetSeasonJSON(
-            OLD.contentId,
-            OLD.contentRefId,
-            OLD.title,
-            OLD.description,
-            OLD.seasonNumber,
-            OLD.episodeCount,
-            OLD.releaseDate,
-            OLD.posterPath,
-            OLD.voteAverage,
-            OLD.voteCount,
-            OLD.isActive
-        ),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
+    DECLARE v_graveyard_id UUID;
+    DECLARE v_series_id UUID;
 
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
+    -- First get the series ID if it exists
+    SELECT contentId INTO v_series_id
+    FROM Series
+    WHERE contentId = OLD.contentRefId
+    LIMIT 1;
+
+    -- Delete all related Episodes
+    DELETE FROM Episodes WHERE contentRefId = OLD.contentId;
+
+    -- Update parent Series if it exists
+    IF v_series_id IS NOT NULL THEN
+        UPDATE Series 
+        SET totalSeasons = GREATEST(0, totalSeasons - 1)
+        WHERE contentId = v_series_id;
+    END IF;
+
+    CALL SeasonsDeleteAudit(
         OLD.contentId,
-        'Seasons',
         OLD.contentRefId,
-        'tmdb',
         OLD.title,
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'contentId', OLD.contentId,
-            'contentRefId', OLD.contentRefId,
-            'title', OLD.title,
-            'description', OLD.description,
-            'seasonNumber', OLD.seasonNumber,
-            'episodeCount', OLD.episodeCount,
-            'releaseDate', OLD.releaseDate,
-            'posterPath', OLD.posterPath,
-            'voteAverage', OLD.voteAverage,
-            'voteCount', OLD.voteCount,
-            'isActive', OLD.isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.description,
+        OLD.seasonNumber,
+        OLD.episodeCount,
+        OLD.releaseDate,
+        OLD.posterPath,
+        OLD.voteAverage,
+        OLD.voteCount,
+        OLD.isActive,
+        v_graveyard_id
     );
 END //
 
 -- Episodes triggers
 CREATE TRIGGER Episodes_Insert_Audit
-AFTER INSERT ON Episodes
+BEFORE INSERT ON Episodes
 FOR EACH ROW
 BEGIN
+    -- Update episode count in Seasons
+    UPDATE Seasons 
+    SET episodeCount = episodeCount + 1
+    WHERE contentId = NEW.contentRefId;
+
+    -- Update total episodes in Series
+    UPDATE Series serie
+    INNER JOIN Seasons season ON season.contentRefId = serie.contentId
+    SET serie.totalEpisodes = serie.totalEpisodes + 1
+    WHERE season.contentId = NEW.contentRefId;
+
+    -- Log the audit
     CALL LogAudit(
-        'Episodes', 
-        NEW.contentId, 
+        'Episodes',
+        NEW.contentId,
         'insert',
         NULL,
         GetEpisodeJSON(
@@ -1348,6 +1245,7 @@ BEGIN
             NEW.imdbId,
             NEW.rgId,
             NEW.title,
+            NEW.altTitle,
             NEW.description,
             NEW.episodeNumber,
             NEW.runtime,
@@ -1376,6 +1274,7 @@ BEGIN
         OLD.imdbId,
         OLD.rgId,
         OLD.title,
+        OLD.altTitle,
         OLD.description,
         OLD.episodeNumber,
         OLD.runtime,
@@ -1394,6 +1293,7 @@ BEGIN
         NEW.imdbId,
         NEW.rgId,
         NEW.title,
+        NEW.altTitle,
         NEW.description,
         NEW.episodeNumber,
         NEW.runtime,
@@ -1424,74 +1324,57 @@ CREATE TRIGGER Episodes_Delete_Audit
 BEFORE DELETE ON Episodes
 FOR EACH ROW
 BEGIN
-    -- Log audit
-    CALL LogAudit(
-        'Episodes',
-        OLD.contentId,
-        'delete',
-        GetEpisodeJSON(
-            OLD.contentId,
-            OLD.contentRefId,
-            OLD.tmdbId,
-            OLD.imdbId,
-            OLD.rgId,
-            OLD.title,
-            OLD.description,
-            OLD.episodeNumber,
-            OLD.runtime,
-            OLD.releaseDate,
-            OLD.voteAverage,
-            OLD.voteCount,
-            OLD.posterPath,
-            OLD.backdropPath,
-            OLD.isActive
-        ),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
+    DECLARE v_graveyard_id UUID;
+    DECLARE v_series_id UUID;
+    DECLARE v_season_id UUID;
+    DECLARE v_episode_count INT;
 
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
+    -- First get the season ID and its current episode count if it exists
+    SELECT contentId, episodeCount INTO v_season_id, v_episode_count
+    FROM Seasons
+    WHERE contentId = OLD.contentRefId
+    LIMIT 1;
+
+    -- If we found a season, get its series and update counts
+    IF v_season_id IS NOT NULL THEN
+        -- Get the series ID if it exists
+        SELECT serie.contentId INTO v_series_id
+        FROM Series serie
+        INNER JOIN Seasons season ON serie.contentId = season.contentRefId
+        WHERE season.contentId = v_season_id
+        LIMIT 1;
+
+        -- Update season's episode count
+        UPDATE Seasons 
+        SET episodeCount = GREATEST(0, v_episode_count - 1)
+        WHERE contentId = v_season_id;
+
+        -- Update series total episodes if we found a series
+        IF v_series_id IS NOT NULL THEN
+            UPDATE Series
+            SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
+            WHERE contentId = v_series_id;
+        END IF;
+    END IF;
+
+    CALL EpisodesDeleteAudit(
         OLD.contentId,
-        'Episodes',
         OLD.contentRefId,
-        'tmdb',
+        OLD.tmdbId,
+        OLD.imdbId,
+        OLD.rgId,
         OLD.title,
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'contentId', OLD.contentId,
-            'contentRefId', OLD.contentRefId,
-            'tmdbId', OLD.tmdbId,
-            'imdbId', OLD.imdbId,
-            'rgId', OLD.rgId,
-            'title', OLD.title,
-            'description', OLD.description,
-            'episodeNumber', OLD.episodeNumber,
-            'runtime', OLD.runtime,
-            'releaseDate', OLD.releaseDate,
-            'voteAverage', OLD.voteAverage,
-            'voteCount', OLD.voteCount,
-            'posterPath', OLD.posterPath,
-            'backdropPath', OLD.backdropPath,
-            'isActive', OLD.isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.altTitle,
+        OLD.description,
+        OLD.episodeNumber,
+        OLD.runtime,
+        OLD.releaseDate,
+        OLD.voteAverage,
+        OLD.voteCount,
+        OLD.posterPath,
+        OLD.backdropPath,
+        OLD.isActive,
+        v_graveyard_id
     );
 END //
 
@@ -1502,125 +1385,6 @@ BEGIN
     UPDATE Series 
     SET totalSeasons = totalSeasons + 1
     WHERE contentId = NEW.contentRefId;
-END //
-
--- Create trigger to update Series.seasonContentIds when a season is deleted
-CREATE TRIGGER Seasons_Series_Delete AFTER DELETE ON Seasons
-FOR EACH ROW
-BEGIN
-    UPDATE Series 
-    SET totalSeasons = totalSeasons - 1
-    WHERE contentId = OLD.contentRefId;
-END //
-
--- Create trigger to update Seasons.episodeContentIds when a new episode is added
-CREATE TRIGGER Episodes_Seasons_Insert AFTER INSERT ON Episodes
-FOR EACH ROW
-BEGIN
-    UPDATE Seasons 
-    SET episodeCount = episodeCount + 1
-    WHERE contentId = NEW.contentRefId;
-END //
-
--- Create trigger to update Seasons.episodeContentIds when an episode is deleted
-CREATE TRIGGER Episodes_Seasons_Delete AFTER DELETE ON Episodes
-FOR EACH ROW
-BEGIN
-    UPDATE Seasons 
-    SET episodeCount = episodeCount - 1
-    WHERE contentId = OLD.contentRefId;
-END //
-
--- Create trigger to update Series.totalEpisodes when a new episode is added
-CREATE TRIGGER Episodes_Series_Insert AFTER INSERT ON Episodes
-FOR EACH ROW
-BEGIN
-    UPDATE Series serie
-    INNER JOIN Seasons season ON season.contentRefId = serie.contentId
-    SET serie.totalEpisodes = serie.totalEpisodes + 1
-    WHERE season.contentId = NEW.contentRefId;
-END //
-
--- Create trigger to update Series.totalEpisodes when an episode is deleted
-CREATE TRIGGER Episodes_Series_Delete AFTER DELETE ON Episodes
-FOR EACH ROW
-BEGIN
-    UPDATE Series serie
-    INNER JOIN Seasons season ON season.contentRefId = serie.contentId
-    SET serie.totalEpisodes = serie.totalEpisodes - 1
-    WHERE season.contentId = OLD.contentRefId;
-END //
-
--- Triggers for propagating isActive changes
-
--- Series -> Seasons -> Episodes
-CREATE TRIGGER Series_IsActive_Update
-AFTER UPDATE ON Series
-FOR EACH ROW
-BEGIN
-    IF OLD.isActive <> NEW.isActive THEN
-        -- Update all related Seasons
-        UPDATE Seasons 
-        SET isActive = NEW.isActive 
-        WHERE contentRefId = NEW.contentId;
-        
-        -- Update all related Episodes through Seasons
-        UPDATE Episodes e
-        INNER JOIN Seasons s ON e.contentRefId = s.contentId
-        SET e.isActive = NEW.isActive
-        WHERE s.contentRefId = NEW.contentId;
-    END IF;
-END //
-
--- Movies -> MoviesDeeplinks -> MoviesPrices
-CREATE TRIGGER Movies_IsActive_Update
-AFTER UPDATE ON Movies
-FOR EACH ROW
-BEGIN
-    IF OLD.isActive <> NEW.isActive THEN
-        -- Update all related MoviesDeeplinks
-        UPDATE MoviesDeeplinks 
-        SET isActive = NEW.isActive 
-        WHERE contentRefId = NEW.contentId;
-        
-        -- Update all related MoviesPrices through MoviesDeeplinks
-        UPDATE MoviesPrices p
-        INNER JOIN MoviesDeeplinks d ON p.contentRefId = d.contentId
-        SET p.isActive = NEW.isActive
-        WHERE d.contentRefId = NEW.contentId;
-    END IF;
-END //
-
--- Episodes -> SeriesDeeplinks -> SeriesPrices
-CREATE TRIGGER Episodes_IsActive_Update
-AFTER UPDATE ON Episodes
-FOR EACH ROW
-BEGIN
-    IF OLD.isActive <> NEW.isActive THEN
-        -- Update all related SeriesDeeplinks
-        UPDATE SeriesDeeplinks 
-        SET isActive = NEW.isActive 
-        WHERE contentRefId = NEW.contentId;
-        
-        -- Update all related SeriesPrices through SeriesDeeplinks
-        UPDATE SeriesPrices p
-        INNER JOIN SeriesDeeplinks d ON p.contentRefId = d.contentId
-        SET p.isActive = NEW.isActive
-        WHERE d.contentRefId = NEW.contentId;
-    END IF;
-END //
-
--- Seasons -> Episodes cascade
-CREATE TRIGGER Seasons_IsActive_Update
-AFTER UPDATE ON Seasons
-FOR EACH ROW
-BEGIN
-    IF OLD.isActive <> NEW.isActive THEN
-        -- Update all related Episodes
-        UPDATE Episodes 
-        SET isActive = NEW.isActive 
-        WHERE contentRefId = NEW.contentId;
-    END IF;
 END //
 
 -- MoviesDeeplinks triggers
@@ -1650,11 +1414,11 @@ BEGIN
         IF NEW.title IS NULL OR TRIM(NEW.title) = '' THEN
             SET NEW.title = inherited_title;
         END IF;
-        
+
         IF NEW.tmdbId IS NULL OR TRIM(NEW.tmdbId) = '' THEN
             SET NEW.tmdbId = inherited_tmdbId;
         END IF;
-        
+
         IF NEW.releaseDate IS NULL THEN
             SET NEW.releaseDate = inherited_releaseDate;
         END IF;
@@ -1765,85 +1529,30 @@ CREATE TRIGGER MoviesDeeplinks_Delete_Audit
 BEFORE DELETE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
-    DECLARE display_title VARCHAR(255);
-    SET display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
-    
-    CALL LogAudit(
-        'MoviesDeeplinks',
+    DECLARE v_graveyard_id UUID;
+    CALL MoviesDeeplinksDeleteAudit(
         OLD.contentId,
-        'delete',
-        GetDeeplinkJSON(
-            OLD.contentId,
-            OLD.contentRefId,
-            display_title,
-            OLD.sourceId,
-            OLD.sourceType,
-            OLD.originSource,
-            OLD.region,
-            OLD.web,
-            OLD.android,
-            OLD.iOS,
-            OLD.androidTv,
-            OLD.fireTv,
-            OLD.lg,
-            OLD.samsung,
-            OLD.tvOS,
-            OLD.roku,
-            OLD.isActive,
-            OLD.tmdbId
-        ),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
-    
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
-        OLD.contentId,
-        'MoviesDeeplinks',
+        OLD.contentRefId,
+        OLD.tmdbId,
+        OLD.title,
+        OLD.altTitle,
+        OLD.releaseDate,
+        OLD.altReleaseDate,
         OLD.sourceId,
         OLD.sourceType,
-        COALESCE(OLD.altTitle, OLD.title),
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'contentId', OLD.contentId,
-            'contentRefId', OLD.contentRefId,
-            'tmdbId', OLD.tmdbId,
-            'title', OLD.title,
-            'altTitle', OLD.altTitle,
-            'releaseDate', OLD.releaseDate,
-            'altReleaseDate', OLD.altReleaseDate,
-            'sourceId', OLD.sourceId,
-            'sourceType', OLD.sourceType,
-            'originSource', OLD.originSource,
-            'region', OLD.region,
-            'web', OLD.web,
-            'android', OLD.android,
-            'iOS', OLD.iOS,
-            'androidTv', OLD.androidTv,
-            'fireTv', OLD.fireTv,
-            'lg', OLD.lg,
-            'samsung', OLD.samsung,
-            'tvOS', OLD.tvOS,
-            'roku', OLD.roku,
-            'isActive', OLD.isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.originSource,
+        OLD.region,
+        OLD.web,
+        OLD.android,
+        OLD.iOS,
+        OLD.androidTv,
+        OLD.fireTv,
+        OLD.lg,
+        OLD.samsung,
+        OLD.tvOS,
+        OLD.roku,
+        OLD.isActive,
+        v_graveyard_id
     );
 END //
 
@@ -1857,7 +1566,7 @@ BEGIN
     DECLARE inherited_releaseDate DATE;
     DECLARE display_title VARCHAR(255);
     
-    -- If contentRefId exists, get data from Series table
+    -- If contentRefId exists, get data from Episodes table
     IF NEW.contentRefId IS NOT NULL THEN
         SELECT 
             title,
@@ -1990,91 +1699,36 @@ CREATE TRIGGER SeriesDeeplinks_Delete_Audit
 BEFORE DELETE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
-    DECLARE display_title VARCHAR(255);
-    SET display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
-    
-    CALL LogAudit(
-        'SeriesDeeplinks', 
-        OLD.contentId, 
-        'delete',
-        GetDeeplinkJSON(
-            OLD.contentId, 
-            OLD.contentRefId, 
-            display_title,
-            OLD.sourceId, 
-            OLD.sourceType, 
-            OLD.originSource, 
-            OLD.region, 
-            OLD.web,
-            OLD.android,
-            OLD.iOS,
-            OLD.androidTv,
-            OLD.fireTv,
-            OLD.lg,
-            OLD.samsung,
-            OLD.tvOS,
-            OLD.roku,
-            OLD.isActive,
-            OLD.tmdbId
-        ),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
-    
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
+    DECLARE v_graveyard_id UUID;
+    CALL SeriesDeeplinksDeleteAudit(
         OLD.contentId,
-        'SeriesDeeplinks',
+        OLD.contentRefId,
+        OLD.tmdbId,
+        OLD.title,
+        OLD.altTitle,
+        OLD.releaseDate,
+        OLD.altReleaseDate,
         OLD.sourceId,
         OLD.sourceType,
-        COALESCE(OLD.altTitle, OLD.title),
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'contentId', OLD.contentId,
-            'contentRefId', OLD.contentRefId,
-            'tmdbId', OLD.tmdbId,
-            'title', OLD.title,
-            'altTitle', OLD.altTitle,
-            'releaseDate', OLD.releaseDate,
-            'altReleaseDate', OLD.altReleaseDate,
-            'sourceId', OLD.sourceId,
-            'sourceType', OLD.sourceType,
-            'originSource', OLD.originSource,
-            'region', OLD.region,
-            'web', OLD.web,
-            'android', OLD.android,
-            'iOS', OLD.iOS,
-            'androidTv', OLD.androidTv,
-            'fireTv', OLD.fireTv,
-            'lg', OLD.lg,
-            'samsung', OLD.samsung,
-            'tvOS', OLD.tvOS,
-            'roku', OLD.roku,
-            'isActive', OLD.isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.originSource,
+        OLD.region,
+        OLD.web,
+        OLD.android,
+        OLD.iOS,
+        OLD.androidTv,
+        OLD.fireTv,
+        OLD.lg,
+        OLD.samsung,
+        OLD.tvOS,
+        OLD.roku,
+        OLD.isActive,
+        v_graveyard_id
     );
 END //
 
 -- MoviesPrices triggers with correct number of arguments
 CREATE TRIGGER MoviesPrices_Insert_Audit
-AFTER INSERT ON MoviesPrices
+BEFORE INSERT ON MoviesPrices
 FOR EACH ROW
 BEGIN
     CALL LogAudit(
@@ -2186,81 +1840,25 @@ CREATE TRIGGER MoviesPrices_Delete_Audit
 BEFORE DELETE ON MoviesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit(
-        'MoviesPrices', 
-        OLD.contentId, 
-        'delete',
-        GetPriceJSON(
-            OLD.contentId,
-            OLD.contentRefId,
-            OLD.region,
-            OLD.buySD,
-            OLD.buyHD,
-            OLD.buyUHD,
-            OLD.rentSD,
-            OLD.rentHD,
-            OLD.rentUHD,
-            NULL,  -- seriesBuySD
-            NULL,  -- seriesBuyHD
-            NULL,  -- seriesBuyUHD
-            NULL,  -- seriesRentSD
-            NULL,  -- seriesRentHD
-            NULL,  -- seriesRentUHD
-            NULL,  -- seasonBuySD
-            NULL,  -- seasonBuyHD
-            NULL,  -- seasonBuyUHD
-            NULL,  -- seasonRentSD
-            NULL,  -- seasonRentHD
-            NULL,  -- seasonRentUHD
-            OLD.isActive
-        ),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
-    
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
+    DECLARE v_graveyard_id UUID;
+    CALL MoviesPricesDeleteAudit(
         OLD.contentId,
-        'MoviesPrices',
         OLD.contentRefId,
-        'tmdb',
-        NULL,
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'contentId', OLD.contentId,
-            'contentRefId', OLD.contentRefId,
-            'region', OLD.region,
-            'buySD', OLD.buySD,
-            'buyHD', OLD.buyHD,
-            'buyUHD', OLD.buyUHD,
-            'rentSD', OLD.rentSD,
-            'rentHD', OLD.rentHD,
-            'rentUHD', OLD.rentUHD,
-            'isActive', OLD.isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.region,
+        OLD.buySD,
+        OLD.buyHD,
+        OLD.buyUHD,
+        OLD.rentSD,
+        OLD.rentHD,
+        OLD.rentUHD,
+        OLD.isActive,
+        v_graveyard_id
     );
 END //
 
 -- SeriesPrices triggers
 CREATE TRIGGER SeriesPrices_Insert_Audit
-AFTER INSERT ON SeriesPrices
+BEFORE INSERT ON SeriesPrices
 FOR EACH ROW
 BEGIN
     CALL LogAudit(
@@ -2303,64 +1901,31 @@ CREATE TRIGGER SeriesPrices_Delete_Audit
 BEFORE DELETE ON SeriesPrices
 FOR EACH ROW
 BEGIN
-    CALL LogAudit(
-        'SeriesPrices', 
-        OLD.contentId, 
-        'delete',
-        GetPriceJSON(OLD.contentId, OLD.contentRefId, OLD.region, OLD.buySD, OLD.buyHD, OLD.buyUHD, OLD.rentSD, OLD.rentHD, OLD.rentUHD, OLD.seriesBuySD, OLD.seriesBuyHD, OLD.seriesBuyUHD, OLD.seriesRentSD, OLD.seriesRentHD, OLD.seriesRentUHD, OLD.seasonBuySD, OLD.seasonBuyHD, OLD.seasonBuyUHD, OLD.seasonRentSD, OLD.seasonRentHD, OLD.seasonRentUHD, OLD.isActive),
-        NULL,
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
-    );
-    
-    -- Add to Graveyard
-    INSERT INTO Graveyard (
-        id,
-        contentId,
-        contentType,
-        sourceId,
-        sourceType,
-        title,
-        reason,
-        details,
-        rawData,
-        username,
-        appContext
-    ) VALUES (
-        UUID_v7(),
+    DECLARE v_graveyard_id UUID;
+    CALL SeriesPricesDeleteAudit(
         OLD.contentId,
-        'SeriesPrices',
         OLD.contentRefId,
-        'tmdb',
-        NULL,
-        'deleted',
-        'Deleted by user',
-        JSON_OBJECT(
-            'contentId', OLD.contentId,
-            'contentRefId', OLD.contentRefId,
-            'region', OLD.region,
-            'buySD', OLD.buySD,
-            'buyHD', OLD.buyHD,
-            'buyUHD', OLD.buyUHD,
-            'rentSD', OLD.rentSD,
-            'rentHD', OLD.rentHD,
-            'rentUHD', OLD.rentUHD,
-            'seriesBuySD', OLD.seriesBuySD,
-            'seriesBuyHD', OLD.seriesBuyHD,
-            'seriesBuyUHD', OLD.seriesBuyUHD,
-            'seriesRentSD', OLD.seriesRentSD,
-            'seriesRentHD', OLD.seriesRentHD,
-            'seriesRentUHD', OLD.seriesRentUHD,
-            'seasonBuySD', OLD.seasonBuySD,
-            'seasonBuyHD', OLD.seasonBuyHD,
-            'seasonBuyUHD', OLD.seasonBuyUHD,
-            'seasonRentSD', OLD.seasonRentSD,
-            'seasonRentHD', OLD.seasonRentHD,
-            'seasonRentUHD', OLD.seasonRentUHD,
-            'isActive', OLD.isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        OLD.region,
+        OLD.buySD,
+        OLD.buyHD,
+        OLD.buyUHD,
+        OLD.rentSD,
+        OLD.rentHD,
+        OLD.rentUHD,
+        OLD.seriesBuySD,
+        OLD.seriesBuyHD,
+        OLD.seriesBuyUHD,
+        OLD.seriesRentSD,
+        OLD.seriesRentHD,
+        OLD.seriesRentUHD,
+        OLD.seasonBuySD,
+        OLD.seasonBuyHD,
+        OLD.seasonBuyUHD,
+        OLD.seasonRentSD,
+        OLD.seasonRentHD,
+        OLD.seasonRentUHD,
+        OLD.isActive,
+        v_graveyard_id
     );
 END //
 
@@ -2373,7 +1938,7 @@ DROP PROCEDURE IF EXISTS DropAllProcedures; //
 -- Central audit logging procedure
 CREATE PROCEDURE LogAudit(
     IN tableName VARCHAR(64),
-    IN contentIdRef UUID,
+    IN contentRefId UUID,
     IN actionType ENUM('insert', 'update', 'delete', 'restore'),
     IN oldData JSON,
     IN newData JSON,
@@ -2383,7 +1948,7 @@ CREATE PROCEDURE LogAudit(
 BEGIN
     INSERT INTO AuditLog (
         id,
-        contentIdRef,
+        contentRefId,
         tableName,
         action,
         username,
@@ -2392,13 +1957,728 @@ BEGIN
         newData
     ) VALUES (
         UUID_v7(),
-        contentIdRef,
+        contentRefId,
         tableName,
         actionType,
         IFNULL(username, 'system'),
         IFNULL(context, 'system'),
         oldData,
         newData
+    );
+END //
+
+-- Movies delete audit procedure
+CREATE PROCEDURE MoviesDeleteAudit(
+    IN p_contentId UUID,
+    IN p_tmdbId VARCHAR(20),
+    IN p_imdbId VARCHAR(20),
+    IN p_rgId VARCHAR(128),
+    IN p_title VARCHAR(255),
+    IN p_altTitle VARCHAR(255),
+    IN p_description TEXT,
+    IN p_runtime INT,
+    IN p_releaseDate DATE,
+    IN p_posterPath VARCHAR(255),
+    IN p_backdropPath VARCHAR(255),
+    IN p_popularity DECIMAL(10,2),
+    IN p_voteAverage DECIMAL(3,1),
+    IN p_voteCount INT,
+    IN p_genres JSON,
+    IN p_keywords JSON,
+    IN p_cast JSON,
+    IN p_crew JSON,
+    IN p_productionCompanies JSON,
+    IN p_isActive BOOLEAN,
+    IN p_isDupe BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Delete all related
+    DELETE FROM MoviesDeeplinks WHERE contentRefId = p_contentId;
+
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'Movies',
+        p_tmdbId,
+        'tmdb',
+        COALESCE(p_altTitle, p_title),
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'tmdbId', p_tmdbId,
+            'imdbId', p_imdbId,
+            'rgId', p_rgId,
+            'title', p_title,
+            'altTitle', p_altTitle,
+            'description', p_description,
+            'runtime', p_runtime,
+            'releaseDate', p_releaseDate,
+            'posterPath', p_posterPath,
+            'backdropPath', p_backdropPath,
+            'popularity', p_popularity,
+            'voteAverage', p_voteAverage,
+            'voteCount', p_voteCount,
+            'genres', p_genres,
+            'keywords', p_keywords,
+            'cast', p_cast,
+            'crew', p_crew,
+            'productionCompanies', p_productionCompanies,
+            'isActive', p_isActive,
+            'isDupe', p_isDupe
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'Movies',
+        p_contentId,
+        'delete',
+        GetContentJSON(
+            p_contentId, 
+            GetDisplayTitle(p_title, p_altTitle),
+            p_tmdbId, 
+            p_imdbId, 
+            p_rgId, 
+            p_description, 
+            p_releaseDate, 
+            p_posterPath, 
+            p_backdropPath, 
+            p_voteAverage, 
+            p_voteCount, 
+            p_isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
+CREATE PROCEDURE SeriesDeleteAudit(
+    IN p_contentId UUID,
+    IN p_title VARCHAR(255),
+    IN p_altTitle VARCHAR(255),
+    IN p_tmdbId VARCHAR(20),
+    IN p_imdbId VARCHAR(20),
+    IN p_rgId VARCHAR(128),
+    IN p_description TEXT,
+    IN p_releaseDate DATE,
+    IN p_posterPath VARCHAR(255),
+    IN p_backdropPath VARCHAR(255),
+    IN p_popularity DECIMAL(10,2),
+    IN p_voteAverage DECIMAL(3,1),
+    IN p_voteCount INT,
+    IN p_genres JSON,
+    IN p_keywords JSON,
+    IN p_cast JSON,
+    IN p_crew JSON,
+    IN p_productionCompanies JSON,
+    IN p_networks JSON,
+    IN p_totalSeasons INT,
+    IN p_totalEpisodes INT,
+    IN p_isActive BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Delete all related
+    DELETE FROM Seasons WHERE contentRefId = p_contentId;
+
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'Series',
+        p_tmdbId,
+        'tmdb',
+        COALESCE(p_altTitle, p_title),
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'tmdbId', p_tmdbId,
+            'imdbId', p_imdbId,
+            'rgId', p_rgId,
+            'title', p_title,
+            'altTitle', p_altTitle,
+            'description', p_description,
+            'releaseDate', p_releaseDate,
+            'posterPath', p_posterPath,
+            'backdropPath', p_backdropPath,
+            'popularity', p_popularity,
+            'voteAverage', p_voteAverage,
+            'voteCount', p_voteCount,
+            'genres', p_genres,
+            'keywords', p_keywords,
+            'cast', p_cast,
+            'crew', p_crew,
+            'productionCompanies', p_productionCompanies,
+            'networks', p_networks,
+            'totalSeasons', p_totalSeasons,
+            'totalEpisodes', p_totalEpisodes,
+            'isActive', p_isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'Series',
+        p_contentId,
+        'delete',
+        GetContentJSON(
+            p_contentId,
+            GetDisplayTitle(p_title, p_altTitle),
+            p_tmdbId,
+            p_imdbId,
+            p_rgId,
+            p_description,
+            p_releaseDate,
+            p_posterPath,
+            p_backdropPath,
+            p_voteAverage,
+            p_voteCount,
+            p_isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
+CREATE PROCEDURE SeasonsDeleteAudit(
+    IN p_contentId UUID,
+    IN p_contentRefId UUID,
+    IN p_title VARCHAR(255),
+    IN p_description TEXT,
+    IN p_seasonNumber SMALLINT,
+    IN p_episodeCount SMALLINT,
+    IN p_releaseDate DATE,
+    IN p_posterPath VARCHAR(255),
+    IN p_voteAverage DECIMAL(3,1),
+    IN p_voteCount INT,
+    IN p_isActive BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Delete all related
+    DELETE FROM Episodes WHERE contentRefId = p_contentId;
+
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'Seasons',
+        p_contentRefId,
+        'tmdb',
+        p_title,
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'contentRefId', p_contentRefId,
+            'title', p_title,
+            'description', p_description,
+            'seasonNumber', p_seasonNumber,
+            'episodeCount', p_episodeCount,
+            'releaseDate', p_releaseDate,
+            'posterPath', p_posterPath,
+            'voteAverage', p_voteAverage,
+            'voteCount', p_voteCount,
+            'isActive', p_isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'Seasons',
+        p_contentId,
+        'delete',
+        GetContentJSON(
+            p_contentId,
+            p_title,
+            NULL,
+            NULL,
+            NULL,
+            p_description,
+            p_releaseDate,
+            p_posterPath,
+            NULL,
+            p_voteAverage,
+            p_voteCount,
+            p_isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
+CREATE PROCEDURE EpisodesDeleteAudit(
+    IN p_contentId UUID,
+    IN p_contentRefId UUID,
+    IN p_tmdbId VARCHAR(20),
+    IN p_imdbId VARCHAR(20),
+    IN p_rgId VARCHAR(128),
+    IN p_title VARCHAR(255),
+    IN p_altTitle VARCHAR(255),
+    IN p_description TEXT,
+    IN p_episodeNumber SMALLINT,
+    IN p_runtime INT,
+    IN p_releaseDate DATE,
+    IN p_voteAverage DECIMAL(3,1),
+    IN p_voteCount INT,
+    IN p_posterPath VARCHAR(255),
+    IN p_backdropPath VARCHAR(255),
+    IN p_isActive BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Delete all related
+    DELETE FROM SeriesDeeplinks WHERE contentRefId = p_contentId;
+
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'Episodes',
+        p_contentRefId,
+        'tmdb',
+        p_title,
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'contentRefId', p_contentRefId,
+            'tmdbId', p_tmdbId,
+            'imdbId', p_imdbId,
+            'rgId', p_rgId,
+            'title', p_title,
+            'altTitle', p_altTitle,
+            'description', p_description,
+            'episodeNumber', p_episodeNumber,
+            'runtime', p_runtime,
+            'releaseDate', p_releaseDate,
+            'voteAverage', p_voteAverage,
+            'voteCount', p_voteCount,
+            'posterPath', p_posterPath,
+            'backdropPath', p_backdropPath,
+            'isActive', p_isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'Episodes',
+        p_contentId,
+        'delete',
+        GetContentJSON(
+            p_contentId,
+            p_title,
+            p_tmdbId,
+            p_imdbId,
+            p_rgId,
+            p_description,
+            p_releaseDate,
+            p_posterPath,
+            p_backdropPath,
+            p_voteAverage,
+            p_voteCount,
+            p_isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
+CREATE PROCEDURE MoviesDeeplinksDeleteAudit(
+    IN p_contentId UUID,
+    IN p_contentRefId UUID,
+    IN p_tmdbId VARCHAR(20),
+    IN p_title VARCHAR(255),
+    IN p_altTitle VARCHAR(255),
+    IN p_releaseDate DATE,
+    IN p_altReleaseDate DATE,
+    IN p_sourceId SMALLINT,
+    IN p_sourceType VARCHAR(64),
+    IN p_originSource VARCHAR(64),
+    IN p_region VARCHAR(10),
+    IN p_web VARCHAR(512),
+    IN p_android VARCHAR(512),
+    IN p_iOS VARCHAR(512),
+    IN p_androidTv VARCHAR(512),
+    IN p_fireTv VARCHAR(512),
+    IN p_lg VARCHAR(512),
+    IN p_samsung VARCHAR(512),
+    IN p_tvOS VARCHAR(512),
+    IN p_roku VARCHAR(512),
+    IN p_isActive BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Delete all related
+    DELETE FROM MoviesPrices WHERE contentRefId = p_contentId;
+
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'MoviesDeeplinks',
+        p_sourceId,
+        p_sourceType,
+        COALESCE(p_altTitle, p_title),
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'contentRefId', p_contentRefId,
+            'tmdbId', p_tmdbId,
+            'title', p_title,
+            'altTitle', p_altTitle,
+            'releaseDate', p_releaseDate,
+            'altReleaseDate', p_altReleaseDate,
+            'sourceId', p_sourceId,
+            'sourceType', p_sourceType,
+            'originSource', p_originSource,
+            'region', p_region,
+            'web', p_web,
+            'android', p_android,
+            'iOS', p_iOS,
+            'androidTv', p_androidTv,
+            'fireTv', p_fireTv,
+            'lg', p_lg,
+            'samsung', p_samsung,
+            'tvOS', p_tvOS,
+            'roku', p_roku,
+            'isActive', p_isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'MoviesDeeplinks',
+        p_contentId,
+        'delete',
+        GetDeeplinkJSON(
+            p_contentId,
+            p_contentRefId,
+            COALESCE(p_altTitle, p_title),
+            p_sourceId,
+            p_sourceType,
+            p_originSource,
+            p_region,
+            p_web,
+            p_android,
+            p_iOS,
+            p_androidTv,
+            p_fireTv,
+            p_lg,
+            p_samsung,
+            p_tvOS,
+            p_roku,
+            p_isActive,
+            p_tmdbId
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
+CREATE PROCEDURE SeriesDeeplinksDeleteAudit(
+    IN p_contentId UUID,
+    IN p_contentRefId UUID,
+    IN p_tmdbId VARCHAR(20),
+    IN p_title VARCHAR(255),
+    IN p_altTitle VARCHAR(255),
+    IN p_releaseDate DATE,
+    IN p_altReleaseDate DATE,
+    IN p_sourceId SMALLINT,
+    IN p_sourceType VARCHAR(64),
+    IN p_originSource VARCHAR(64),
+    IN p_region VARCHAR(10),
+    IN p_web VARCHAR(512),
+    IN p_android VARCHAR(512),
+    IN p_iOS VARCHAR(512),
+    IN p_androidTv VARCHAR(512),
+    IN p_fireTv VARCHAR(512),
+    IN p_lg VARCHAR(512),
+    IN p_samsung VARCHAR(512),
+    IN p_tvOS VARCHAR(512),
+    IN p_roku VARCHAR(512),
+    IN p_isActive BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Delete all related
+    DELETE FROM SeriesPrices WHERE contentRefId = p_contentId;
+
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'SeriesDeeplinks',
+        p_sourceId,
+        p_sourceType,
+        COALESCE(p_altTitle, p_title),
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'contentRefId', p_contentRefId,
+            'tmdbId', p_tmdbId,
+            'title', p_title,
+            'altTitle', p_altTitle,
+            'releaseDate', p_releaseDate,
+            'altReleaseDate', p_altReleaseDate,
+            'sourceId', p_sourceId,
+            'sourceType', p_sourceType,
+            'originSource', p_originSource,
+            'region', p_region,
+            'web', p_web,
+            'android', p_android,
+            'iOS', p_iOS,
+            'androidTv', p_androidTv,
+            'fireTv', p_fireTv,
+            'lg', p_lg,
+            'samsung', p_samsung,
+            'tvOS', p_tvOS,
+            'roku', p_roku,
+            'isActive', p_isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'SeriesDeeplinks',
+        p_contentId,
+        'delete',
+        GetDeeplinkJSON(
+            p_contentId,
+            p_contentRefId,
+            COALESCE(p_altTitle, p_title),
+            p_sourceId,
+            p_sourceType,
+            p_originSource,
+            p_region,
+            p_web,
+            p_android,
+            p_iOS,
+            p_androidTv,
+            p_fireTv,
+            p_lg,
+            p_samsung,
+            p_tvOS,
+            p_roku,
+            p_isActive,
+            p_tmdbId
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
+CREATE PROCEDURE MoviesPricesDeleteAudit(
+    IN p_contentId UUID,
+    IN p_contentRefId UUID,
+    IN p_region VARCHAR(10),
+    IN p_buySD DECIMAL(10,2),
+    IN p_buyHD DECIMAL(10,2),
+    IN p_buyUHD DECIMAL(10,2),
+    IN p_rentSD DECIMAL(10,2),
+    IN p_rentHD DECIMAL(10,2),
+    IN p_rentUHD DECIMAL(10,2),
+    IN p_isActive BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'MoviesPrices',
+        p_contentRefId,
+        'tmdb',
+        NULL,
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'contentRefId', p_contentRefId,
+            'region', p_region,
+            'buySD', p_buySD,
+            'buyHD', p_buyHD,
+            'buyUHD', p_buyUHD,
+            'rentSD', p_rentSD,
+            'rentHD', p_rentHD,
+            'rentUHD', p_rentUHD,
+            'isActive', p_isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'MoviesPrices',
+        p_contentId,
+        'delete',
+        GetPriceJSON(
+            p_contentId,
+            p_contentRefId,
+            p_region,
+            p_buySD,
+            p_buyHD,
+            p_buyUHD,
+            p_rentSD,
+            p_rentHD,
+            p_rentUHD,
+            NULL, NULL, NULL,
+            NULL, NULL, NULL,
+            NULL, NULL, NULL,
+            NULL, NULL, NULL,
+            p_isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
+CREATE PROCEDURE SeriesPricesDeleteAudit(
+    IN p_contentId UUID,
+    IN p_contentRefId UUID,
+    IN p_region VARCHAR(10),
+    IN p_seriesBuySD DECIMAL(10,2),
+    IN p_seriesBuyHD DECIMAL(10,2),
+    IN p_seriesBuyUHD DECIMAL(10,2),
+    IN p_seriesRentSD DECIMAL(10,2),
+    IN p_seriesRentHD DECIMAL(10,2),
+    IN p_seriesRentUHD DECIMAL(10,2),
+    IN p_seasonBuySD DECIMAL(10,2),
+    IN p_seasonBuyHD DECIMAL(10,2),
+    IN p_seasonBuyUHD DECIMAL(10,2),
+    IN p_seasonRentSD DECIMAL(10,2),
+    IN p_seasonRentHD DECIMAL(10,2),
+    IN p_seasonRentUHD DECIMAL(10,2),
+    IN p_isActive BOOLEAN,
+    OUT p_graveyardId UUID
+)
+BEGIN
+    -- Generate UUID for Graveyard
+    SET p_graveyardId = UUID_v7();
+    
+    -- Insert into Graveyard
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        p_graveyardId,
+        p_contentId,
+        'SeriesPrices',
+        p_contentRefId,
+        'tmdb',
+        NULL,
+        'deleted',
+        'Deleted by user',
+        JSON_OBJECT(
+            'contentId', p_contentId,
+            'contentRefId', p_contentRefId,
+            'region', p_region,
+            'seriesBuySD', p_seriesBuySD,
+            'seriesBuyHD', p_seriesBuyHD,
+            'seriesBuyUHD', p_seriesBuyUHD,
+            'seriesRentSD', p_seriesRentSD,
+            'seriesRentHD', p_seriesRentHD,
+            'seriesRentUHD', p_seriesRentUHD,
+            'seasonBuySD', p_seasonBuySD,
+            'seasonBuyHD', p_seasonBuyHD,
+            'seasonBuyUHD', p_seasonBuyUHD,
+            'seasonRentSD', p_seasonRentSD,
+            'seasonRentHD', p_seasonRentHD,
+            'seasonRentUHD', p_seasonRentUHD,
+            'isActive', p_isActive
+        ),
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+
+    -- Log audit
+    CALL LogAudit(
+        'SeriesPrices',
+        p_contentId,
+        'delete',
+        GetPriceJSON(
+            p_contentId,
+            p_contentRefId,
+            p_region,
+            NULL, NULL, NULL,
+            NULL, NULL, NULL,
+            p_seriesBuySD,
+            p_seriesBuyHD,
+            p_seriesBuyUHD,
+            p_seriesRentSD,
+            p_seriesRentHD,
+            p_seriesRentUHD,
+            p_seasonBuySD,
+            p_seasonBuyHD,
+            p_seasonBuyUHD,
+            p_seasonRentSD,
+            p_seasonRentHD,
+            p_seasonRentUHD,
+            p_isActive
+        ),
+        NULL,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
     );
 END //
 
