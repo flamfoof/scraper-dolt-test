@@ -426,6 +426,54 @@ BEGIN
     RETURN result;
 END //
 
+CREATE FUNCTION GetContentDataJSON(
+    p_jsonData JSON,
+    showAllFields BOOLEAN
+) RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE result JSON;
+    DECLARE keys_array JSON;
+    DECLARE i INT;
+    DECLARE current_key TEXT DEFAULT NULL;
+    DECLARE current_value JSON;
+    DECLARE jsonType TEXT;
+    
+    SET result = JSON_OBJECT();
+    SET keys_array = JSON_KEYS(p_jsonData);
+    SET i = 0;
+    
+    WHILE i < JSON_LENGTH(keys_array) DO
+        SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
+        SET current_value = JSON_UNQUOTE(JSON_EXTRACT(p_jsonData, CONCAT('$.', current_key)));
+        SET jsonType = JSON_TYPE(JSON_EXTRACT(p_jsonData, CONCAT('$.', current_key)));
+        
+        CASE jsonType
+            WHEN 'NULL' THEN
+                IF showAllFields THEN
+                    SET result = JSON_SET(result, CONCAT('$.', current_key), NULL);
+                END IF;
+            WHEN 'STRING' THEN
+                SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
+            WHEN 'INTEGER' THEN
+                SET result = JSON_SET(result, CONCAT('$.', current_key), CAST(current_value AS DECIMAL(10,2)));
+            WHEN 'BOOLEAN' THEN
+                SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
+            WHEN 'DECIMAL' THEN
+                SET result = JSON_SET(result, CONCAT('$.', current_key), CAST(current_value AS DECIMAL(10,2)));
+            WHEN 'OBJECT' THEN
+                SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
+            WHEN 'ARRAY' THEN
+                SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
+            ELSE
+                SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
+        END CASE;
+        SET i = i + 1;
+    END WHILE;
+    
+    RETURN result;
+END //
+
 -- Helper functions for metadata JSON
 CREATE FUNCTION GetMetadataJSON(
     contentId UUID,
@@ -857,33 +905,38 @@ BEGIN
     RETURN result;
 END //
 
+
 -- Movies triggers
 CREATE TRIGGER Movies_Insert_Audit
 BEFORE INSERT ON Movies
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
+    DECLARE jsonData JSON;
+
     SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+
+    SET jsonData = JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'title', display_title,
+        'tmdbId', NEW.tmdbId,
+        'imdbId', NEW.imdbId,
+        'rgId', NEW.rgId,
+        'description', NEW.description,
+        'releaseDate', NEW.releaseDate,
+        'posterPath', NEW.posterPath,
+        'backdropPath', NEW.backdropPath,
+        'voteAverage', NEW.voteAverage,
+        'voteCount', NEW.voteCount,
+        'isActive', NEW.isActive
+    );
     
     CALL LogAudit(
         'Movies', 
         NEW.contentId, 
         'insert',
         NULL,
-        GetContentJSON(
-            NEW.contentId, 
-            display_title,
-            NEW.tmdbId, 
-            NEW.imdbId, 
-            NEW.rgId, 
-            NEW.description, 
-            NEW.releaseDate, 
-            NEW.posterPath, 
-            NEW.backdropPath, 
-            NEW.voteAverage, 
-            NEW.voteCount, 
-            NEW.isActive
-        ),
+        GetContentDataJSON(jsonData, true),
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -899,35 +952,35 @@ BEGIN
     SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    SET old_json = GetContentJSON(
-        OLD.contentId, 
-        old_display_title,
-        OLD.tmdbId, 
-        OLD.imdbId, 
-        OLD.rgId, 
-        OLD.description, 
-        OLD.releaseDate, 
-        OLD.posterPath, 
-        OLD.backdropPath, 
-        OLD.voteAverage, 
-        OLD.voteCount, 
-        OLD.isActive
-    );
+    SET old_json = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'title', old_display_title,
+        'tmdbId', OLD.tmdbId,
+        'imdbId', OLD.imdbId,
+        'rgId', OLD.rgId,
+        'description', OLD.description,
+        'releaseDate', OLD.releaseDate,
+        'posterPath', OLD.posterPath,
+        'backdropPath', OLD.backdropPath,
+        'voteAverage', OLD.voteAverage,
+        'voteCount', OLD.voteCount,
+        'isActive', OLD.isActive
+    ), false);
     
-    SET new_json = GetContentJSON(
-        NEW.contentId, 
-        new_display_title,
-        NEW.tmdbId, 
-        NEW.imdbId, 
-        NEW.rgId, 
-        NEW.description, 
-        NEW.releaseDate, 
-        NEW.posterPath, 
-        NEW.backdropPath, 
-        NEW.voteAverage, 
-        NEW.voteCount, 
-        NEW.isActive
-    );
+    SET new_json = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId, 
+        'title', new_display_title,
+        'tmdbId', NEW.tmdbId, 
+        'imdbId', NEW.imdbId, 
+        'rgId', NEW.rgId, 
+        'description', NEW.description, 
+        'releaseDate', NEW.releaseDate, 
+        'posterPath', NEW.posterPath, 
+        'backdropPath', NEW.backdropPath, 
+        'voteAverage', NEW.voteAverage, 
+        'voteCount', NEW.voteCount, 
+        'isActive', NEW.isActive
+    ), false);
     
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
@@ -948,29 +1001,34 @@ CREATE TRIGGER Movies_Delete_Audit
 BEFORE DELETE ON Movies
 FOR EACH ROW
 BEGIN
+    DECLARE jsonData JSON;
+    SET jsonData = JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'tmdbId', OLD.tmdbId,
+        'imdbId', OLD.imdbId,
+        'rgId', OLD.rgId,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
+        'description', OLD.description,
+        'runtime', OLD.runtime,
+        'releaseDate', OLD.releaseDate,
+        'posterPath', OLD.posterPath,
+        'backdropPath', OLD.backdropPath,
+        'popularity', OLD.popularity,
+        'voteAverage', OLD.voteAverage,
+        'voteCount', OLD.voteCount,
+        'genres', OLD.genres,
+        'keywords', OLD.keywords,
+        'cast', OLD.cast,
+        'crew', OLD.crew,
+        'productionCompanies', OLD.productionCompanies,
+        'isActive', OLD.isActive,
+        'isDupe', OLD.isDupe
+    );
+
     CALL MoviesDeleteAudit(
-        OLD.contentId,
-        OLD.tmdbId,
-        OLD.imdbId,
-        OLD.rgId,
-        OLD.title,
-        OLD.altTitle,
-        OLD.description,
-        OLD.runtime,
-        OLD.releaseDate,
-        OLD.posterPath,
-        OLD.backdropPath,
-        OLD.popularity,
-        OLD.voteAverage,
-        OLD.voteCount,
-        OLD.genres,
-        OLD.keywords,
-        OLD.cast,
-        OLD.crew,
-        OLD.productionCompanies,
-        OLD.isActive,
-        OLD.isDupe,
-        @graveyard_id
+       jsonData,
+       @graveyard_id
     );
 END //
 
@@ -1016,35 +1074,35 @@ BEGIN
     SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    SET old_json = GetContentJSON(
-        OLD.contentId, 
-        old_display_title,
-        OLD.tmdbId, 
-        OLD.imdbId, 
-        OLD.rgId, 
-        OLD.description, 
-        OLD.releaseDate, 
-        OLD.posterPath, 
-        OLD.backdropPath, 
-        OLD.voteAverage, 
-        OLD.voteCount, 
-        OLD.isActive
-    );
+    SET old_json = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'title', old_display_title,
+        'tmdbId', OLD.tmdbId,
+        'imdbId', OLD.imdbId,
+        'rgId', OLD.rgId,
+        'description', OLD.description,
+        'releaseDate', OLD.releaseDate,
+        'posterPath', OLD.posterPath,
+        'backdropPath', OLD.backdropPath,
+        'voteAverage', OLD.voteAverage,
+        'voteCount', OLD.voteCount,
+        'isActive', OLD.isActive
+    ), false);
     
-    SET new_json = GetContentJSON(
-        NEW.contentId, 
-        new_display_title,
-        NEW.tmdbId, 
-        NEW.imdbId, 
-        NEW.rgId, 
-        NEW.description, 
-        NEW.releaseDate, 
-        NEW.posterPath, 
-        NEW.backdropPath, 
-        NEW.voteAverage, 
-        NEW.voteCount, 
-        NEW.isActive
-    );
+    SET new_json = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId, 
+        'title', new_display_title,
+        'tmdbId', NEW.tmdbId, 
+        'imdbId', NEW.imdbId, 
+        'rgId', NEW.rgId, 
+        'description', NEW.description, 
+        'releaseDate', NEW.releaseDate, 
+        'posterPath', NEW.posterPath, 
+        'backdropPath', NEW.backdropPath, 
+        'voteAverage', NEW.voteAverage, 
+        'voteCount', NEW.voteCount, 
+        'isActive', NEW.isActive
+    ), false);
     
     SET changed_json = GetChangedFieldsJSON(old_json, new_json);
     
@@ -1967,96 +2025,58 @@ BEGIN
     );
 END //
 
+CREATE PROCEDURE CreateGraveyardItem(
+    contentType TEXT,
+    sourceType TEXT,
+    actionType TEXT,
+    reason TEXT,
+    jsonData JSON
+)
+BEGIN
+    DECLARE graveyardId UUID;
+    SET graveyardId = UUID_v7();
+
+    INSERT INTO Graveyard (
+        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
+    ) VALUES (
+        graveyardId,
+        JSON_EXTRACT(jsonData, '$.contentId'),
+        contentType,
+        JSON_EXTRACT(jsonData, '$.tmdbId'),
+        sourceType,
+        COALESCE(JSON_EXTRACT(jsonData, '$.altTitle'), JSON_EXTRACT(jsonData, '$.title')),
+        actionType,
+        reason,
+        jsonData,
+        COALESCE(@username, 'system'),
+        COALESCE(@appContext, 'system')
+    );
+END //
+
 -- Movies delete audit procedure
 CREATE PROCEDURE MoviesDeleteAudit(
-    IN p_contentId UUID,
-    IN p_tmdbId VARCHAR(20),
-    IN p_imdbId VARCHAR(20),
-    IN p_rgId VARCHAR(128),
-    IN p_title VARCHAR(255),
-    IN p_altTitle VARCHAR(255),
-    IN p_description TEXT,
-    IN p_runtime INT,
-    IN p_releaseDate DATE,
-    IN p_posterPath VARCHAR(255),
-    IN p_backdropPath VARCHAR(255),
-    IN p_popularity DECIMAL(10,2),
-    IN p_voteAverage DECIMAL(3,1),
-    IN p_voteCount INT,
-    IN p_genres JSON,
-    IN p_keywords JSON,
-    IN p_cast JSON,
-    IN p_crew JSON,
-    IN p_productionCompanies JSON,
-    IN p_isActive BOOLEAN,
-    IN p_isDupe BOOLEAN,
+    IN jsonData JSON,
     OUT p_graveyardId UUID
 )
 BEGIN
     -- Delete all related
-    DELETE FROM MoviesDeeplinks WHERE contentRefId = p_contentId;
+    DELETE FROM MoviesDeeplinks WHERE contentRefId = JSON_EXTRACT(jsonData, '$.contentId');
 
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
-    
     -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    CALL CreateGraveyardItem(
         'Movies',
-        p_tmdbId,
         'tmdb',
-        COALESCE(p_altTitle, p_title),
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'tmdbId', p_tmdbId,
-            'imdbId', p_imdbId,
-            'rgId', p_rgId,
-            'title', p_title,
-            'altTitle', p_altTitle,
-            'description', p_description,
-            'runtime', p_runtime,
-            'releaseDate', p_releaseDate,
-            'posterPath', p_posterPath,
-            'backdropPath', p_backdropPath,
-            'popularity', p_popularity,
-            'voteAverage', p_voteAverage,
-            'voteCount', p_voteCount,
-            'genres', p_genres,
-            'keywords', p_keywords,
-            'cast', p_cast,
-            'crew', p_crew,
-            'productionCompanies', p_productionCompanies,
-            'isActive', p_isActive,
-            'isDupe', p_isDupe
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
 
     -- Log audit
     CALL LogAudit(
         'Movies',
-        p_contentId,
+        JSON_EXTRACT(jsonData, '$.contentId'),
         'delete',
-        GetContentJSON(
-            p_contentId, 
-            GetDisplayTitle(p_title, p_altTitle),
-            p_tmdbId, 
-            p_imdbId, 
-            p_rgId, 
-            p_description, 
-            p_releaseDate, 
-            p_posterPath, 
-            p_backdropPath, 
-            p_voteAverage, 
-            p_voteCount, 
-            p_isActive
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
