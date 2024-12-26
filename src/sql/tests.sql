@@ -456,8 +456,8 @@ DELIMITER //
 CREATE PROCEDURE TestPartialDeletion()
 BEGIN
     -- Declare variables for test data
-    DECLARE series_id1 UUID;
-    DECLARE series_id2 UUID;
+    DECLARE content_id1 UUID;
+    DECLARE content_id2 UUID;
     DECLARE season_id1 UUID;
     DECLARE season_id2 UUID;
     DECLARE episode_id1 UUID;
@@ -469,14 +469,19 @@ BEGIN
     START TRANSACTION;
     
     -- Create test data: 2 series, each with 1 season and 1 episode
-    SET series_id1 = UUID_v7();
-    SET series_id2 = UUID_v7();
+    SET content_id1 = UUID_v7();
+    SET content_id2 = UUID_v7();
     
     -- Insert two test series
+    INSERT INTO Movies (contentId, title, isActive)
+    VALUES 
+        (content_id1, 'Test Movie 1', true),
+        (content_id2, 'Test Movie 2', true);
     INSERT INTO Series (contentId, title, isActive)
     VALUES 
-        (series_id1, 'Test Series 1', true),
-        (series_id2, 'Test Series 2', true);
+        (content_id1, 'Test Series 1', true),
+        (content_id2, 'Test Series 2', true);
+
     
     -- Insert seasons
     SET season_id1 = UUID_v7();
@@ -484,8 +489,8 @@ BEGIN
     
     INSERT INTO Seasons (contentId, contentRefId, title, seasonNumber)
     VALUES 
-        (season_id1, series_id1, 'Season 1 of Series 1', 1),
-        (season_id2, series_id2, 'Season 1 of Series 2', 1);
+        (season_id1, content_id1, 'Season 1 of Series 1', 1),
+        (season_id2, content_id2, 'Season 1 of Series 2', 1);
     
     -- Insert episodes
     SET episode_id1 = UUID_v7();
@@ -499,6 +504,11 @@ BEGIN
     -- Insert deeplinks
     SET deeplink_id1 = UUID_v7();
     SET deeplink_id2 = UUID_v7();
+
+    INSERT INTO MoviesDeeplinks (contentId, contentRefId, sourceId, sourceType, title)
+    VALUES 
+        (deeplink_id1, content_id1, 1, 'netflix', 'Netflix Link 1'),
+        (deeplink_id2, content_id2, 1, 'netflix', 'Netflix Link 2');
     
     INSERT INTO SeriesDeeplinks (contentId, contentRefId, sourceId, sourceType, title)
     VALUES 
@@ -576,6 +586,7 @@ DELIMITER //
 
 -- Sample scraper data generation procedure
 DROP PROCEDURE IF EXISTS InsertScraperTestData //
+DROP PROCEDURE IF EXISTS TestPartialDeletion //
 
 CREATE PROCEDURE InsertScraperTestData()
 BEGIN

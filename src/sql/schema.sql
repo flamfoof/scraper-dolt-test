@@ -297,17 +297,15 @@ CREATE TABLE Graveyard (
     sourceId VARCHAR(128) NULL COMMENT 'External ID from the source (e.g., TMDB ID, IMDB ID)',
     sourceType VARCHAR(64) NULL COMMENT 'Source of the content (e.g., tmdb, imdb, reelgood)',
     title VARCHAR(255) NULL COMMENT 'Original title of the content',
+    altTitle VARCHAR(255) NULL COMMENT 'Alternate title of the content',
     details TEXT NULL COMMENT 'Additional details about the failure',
     rawData JSON NULL COMMENT 'Original raw data that failed to process',
-    username VARCHAR(64) NULL COMMENT 'Username of who made the change',
+    username VARCHAR(64) NULL COMMENT 'Username of who made the change' DEFAULT 'system',
     appContext ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user') NOT NULL DEFAULT 'system',
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT GraveyardUnique_UK UNIQUE KEY (
         contentType,
-        reason,
-        contentRefId,
-        sourceId,
-        sourceType
+        contentRefId
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -360,74 +358,8 @@ CREATE INDEX SeriesPrices_IDX_region ON SeriesPrices (region);
 DELIMITER //
 
 -- Base function for content JSON with common fields
-CREATE FUNCTION GetContentJSON(
-    p_contentId UUID,
-    p_title VARCHAR(255),
-    p_tmdbId VARCHAR(20),
-    p_imdbId VARCHAR(20),
-    p_rgId VARCHAR(128),
-    p_description TEXT,
-    p_releaseDate DATE,
-    p_posterPath VARCHAR(255),
-    p_backdropPath VARCHAR(255),
-    p_voteAverage DECIMAL(3,1),
-    p_voteCount INT UNSIGNED,
-    p_isActive BOOLEAN
-) RETURNS JSON
-DETERMINISTIC
-BEGIN
-    DECLARE result JSON;
-    SET result = JSON_OBJECT();
-    
-    -- Always include non-nullable fields
-    SET result = JSON_SET(result,
-        '$.contentId', p_contentId,
-        '$.title', p_title,
-        '$.isActive', COALESCE(p_isActive, true)
-    );
-    
-    -- Add optional fields only if they are not null
-    IF p_tmdbId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.tmdbId', p_tmdbId);
-    END IF;
-
-    IF p_imdbId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.imdbId', p_imdbId);
-    END IF;
-
-    IF p_rgId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.rgId', p_rgId);
-    END IF;
-
-    IF p_description IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.description', p_description);
-    END IF;
-
-    IF p_releaseDate IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.releaseDate', p_releaseDate);
-    END IF;
-
-    IF p_posterPath IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.posterPath', p_posterPath);
-    END IF;
-
-    IF p_backdropPath IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.backdropPath', p_backdropPath);
-    END IF;
-
-    IF p_voteAverage IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteAverage', p_voteAverage);
-    END IF;
-
-    IF p_voteCount IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteCount', p_voteCount);
-    END IF;
-    
-    RETURN result;
-END //
-
 CREATE FUNCTION GetContentDataJSON(
-    p_jsonData JSON,
+    jsonData JSON,
     showAllFields BOOLEAN
 ) RETURNS JSON
 DETERMINISTIC
@@ -440,13 +372,13 @@ BEGIN
     DECLARE jsonType TEXT;
     
     SET result = JSON_OBJECT();
-    SET keys_array = JSON_KEYS(p_jsonData);
+    SET keys_array = JSON_KEYS(jsonData);
     SET i = 0;
     
     WHILE i < JSON_LENGTH(keys_array) DO
         SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
-        SET current_value = JSON_UNQUOTE(JSON_EXTRACT(p_jsonData, CONCAT('$.', current_key)));
-        SET jsonType = JSON_TYPE(JSON_EXTRACT(p_jsonData, CONCAT('$.', current_key)));
+        SET current_value = JSON_UNQUOTE(JSON_EXTRACT(jsonData, CONCAT('$.', current_key)));
+        SET jsonType = JSON_TYPE(JSON_EXTRACT(jsonData, CONCAT('$.', current_key)));
         
         CASE jsonType
             WHEN 'NULL' THEN
@@ -474,384 +406,6 @@ BEGIN
     RETURN result;
 END //
 
--- Helper functions for metadata JSON
-CREATE FUNCTION GetMetadataJSON(
-    contentId UUID,
-    title VARCHAR(255),
-    tmdbId VARCHAR(20),
-    releaseDate DATE,
-    description TEXT,
-    popularity DECIMAL(10,2),
-    voteAverage DECIMAL(3,1),
-    voteCount INT UNSIGNED,
-    genres JSON,
-    keywords JSON,
-    cast JSON,
-    crew JSON
-) RETURNS JSON
-DETERMINISTIC
-BEGIN
-    DECLARE result JSON;
-    SET result = JSON_OBJECT();
-    
-    -- Always include non-nullable fields
-    SET result = JSON_SET(result,
-        '$.contentId', contentId,
-        '$.title', title
-    );
-    
-    -- Add optional fields only if they are not null
-    IF tmdbId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.tmdbId', tmdbId);
-    END IF;
-
-    IF releaseDate IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.releaseDate', releaseDate);
-    END IF;
-
-    IF description IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.description', description);
-    END IF;
-
-    IF popularity IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.popularity', popularity);
-    END IF;
-
-    IF voteAverage IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteAverage', voteAverage);
-    END IF;
-
-    IF voteCount IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteCount', voteCount);
-    END IF;
-
-    IF genres IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.genres', genres);
-    END IF;
-
-    IF keywords IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.keywords', keywords);
-    END IF;
-
-    IF cast IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.cast', cast);
-    END IF;
-
-    IF crew IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.crew', crew);
-    END IF;
-    
-    RETURN result;
-END //
-
--- Helper function for episode metadata JSON
-CREATE FUNCTION GetEpisodeMetadataJSON(
-    contentId UUID,
-    title VARCHAR(255),
-    tmdbId VARCHAR(20),
-    releaseDate DATE,
-    description TEXT,
-    popularity DECIMAL(10,2),
-    voteAverage DECIMAL(3,1),
-    voteCount INT UNSIGNED,
-    episodeNumber INT UNSIGNED,
-    seasonNumber INT UNSIGNED,
-    cast JSON,
-    crew JSON
-) RETURNS JSON
-DETERMINISTIC
-BEGIN
-    DECLARE result JSON;
-    SET result = JSON_OBJECT();
-    
-    -- Always include non-nullable fields
-    SET result = JSON_SET(result,
-        '$.contentId', contentId,
-        '$.title', title,
-        '$.episodeNumber', episodeNumber,
-        '$.seasonNumber', seasonNumber
-    );
-    
-    -- Add optional fields only if they are not null
-    IF tmdbId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.tmdbId', tmdbId);
-    END IF;
-
-    IF releaseDate IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.releaseDate', releaseDate);
-    END IF;
-
-    IF description IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.description', description);
-    END IF;
-
-    IF popularity IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.popularity', popularity);
-    END IF;
-
-    IF voteAverage IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteAverage', voteAverage);
-    END IF;
-
-    IF voteCount IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteCount', voteCount);
-    END IF;
-
-    IF cast IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.cast', cast);
-    END IF;
-
-    IF crew IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.crew', crew);
-    END IF;
-    
-    RETURN result;
-END //
-
--- Function for Deeplinks JSON (both Movies and Episodes)
-CREATE FUNCTION GetDeeplinkJSON(
-    p_contentId UUID,
-    p_contentRefId UUID,
-    p_title VARCHAR(255),
-    p_sourceId SMALLINT UNSIGNED,
-    p_sourceType VARCHAR(64),
-    p_originSource VARCHAR(64),
-    p_region VARCHAR(10),
-    p_web VARCHAR(512),
-    p_android VARCHAR(512),
-    p_iOS VARCHAR(512),
-    p_androidTv VARCHAR(512),
-    p_fireTv VARCHAR(512),
-    p_lg VARCHAR(512),
-    p_samsung VARCHAR(512),
-    p_tvOS VARCHAR(512),
-    p_roku VARCHAR(512),
-    p_isActive BOOLEAN,
-    p_tmdbId VARCHAR(20)
-)
-RETURNS JSON
-DETERMINISTIC
-BEGIN
-    DECLARE result JSON;
-    SET result = JSON_OBJECT(
-        'contentId', p_contentId,
-        'contentRefId', p_contentRefId,
-        'title', p_title,
-        'sourceId', p_sourceId,
-        'sourceType', p_sourceType,
-        'originSource', p_originSource,
-        'region', p_region,
-        'web', p_web,
-        'android', p_android,
-        'iOS', p_iOS,
-        'androidTv', p_androidTv,
-        'fireTv', p_fireTv,
-        'lg', p_lg,
-        'samsung', p_samsung,
-        'tvOS', p_tvOS,
-        'roku', p_roku,
-        'isActive', p_isActive,
-        'tmdbId', p_tmdbId
-    );
-    RETURN result;
-END //
-
--- Function for Prices JSON (both Movies and Episodes)
-CREATE FUNCTION GetPriceJSON(
-    p_contentId UUID,
-    p_contentRefId UUID,
-    p_region VARCHAR(10),
-    p_buySD DECIMAL(10,2),
-    p_buyHD DECIMAL(10,2),
-    p_buyUHD DECIMAL(10,2),
-    p_rentSD DECIMAL(10,2),
-    p_rentHD DECIMAL(10,2),
-    p_rentUHD DECIMAL(10,2),
-    p_seriesBuySD DECIMAL(10,2),
-    p_seriesBuyHD DECIMAL(10,2),
-    p_seriesBuyUHD DECIMAL(10,2),
-    p_seriesRentSD DECIMAL(10,2),
-    p_seriesRentHD DECIMAL(10,2),
-    p_seriesRentUHD DECIMAL(10,2),
-    p_seasonBuySD DECIMAL(10,2),
-    p_seasonBuyHD DECIMAL(10,2),
-    p_seasonBuyUHD DECIMAL(10,2),
-    p_seasonRentSD DECIMAL(10,2),
-    p_seasonRentHD DECIMAL(10,2),
-    p_seasonRentUHD DECIMAL(10,2),
-    p_isActive BOOLEAN
-)
-RETURNS JSON
-DETERMINISTIC
-BEGIN
-    DECLARE result JSON;
-    SET result = JSON_OBJECT(
-        'contentId', p_contentId,
-        'contentRefId', p_contentRefId,
-        'region', p_region,
-        'buySD', p_buySD,
-        'buyHD', p_buyHD,
-        'buyUHD', p_buyUHD,
-        'rentSD', p_rentSD,
-        'rentHD', p_rentHD,
-        'rentUHD', p_rentUHD,
-        'seriesBuySD', p_seriesBuySD,
-        'seriesBuyHD', p_seriesBuyHD,
-        'seriesBuyUHD', p_seriesBuyUHD,
-        'seriesRentSD', p_seriesRentSD,
-        'seriesRentHD', p_seriesRentHD,
-        'seriesRentUHD', p_seriesRentUHD,
-        'seasonBuySD', p_seasonBuySD,
-        'seasonBuyHD', p_seasonBuyHD,
-        'seasonBuyUHD', p_seasonBuyUHD,
-        'seasonRentSD', p_seasonRentSD,
-        'seasonRentHD', p_seasonRentHD,
-        'seasonRentUHD', p_seasonRentUHD,
-        'isActive', p_isActive
-    );
-    RETURN result;
-END //
-
--- Function for Seasons JSON
-CREATE FUNCTION GetSeasonJSON(
-    p_contentId UUID,
-    p_contentRefId UUID,
-    p_title VARCHAR(255),
-    p_description TEXT,
-    p_seasonNumber SMALLINT UNSIGNED,
-    p_episodeCount SMALLINT UNSIGNED,
-    p_releaseDate DATE,
-    p_posterPath VARCHAR(255),
-    p_voteAverage DECIMAL(3,1),
-    p_voteCount INT UNSIGNED,
-    p_isActive BOOLEAN
-) RETURNS JSON
-DETERMINISTIC
-BEGIN
-    DECLARE result JSON;
-    SET result = JSON_OBJECT();
-    
-    -- Always include non-nullable fields
-    SET result = JSON_SET(result,
-        '$.contentId', p_contentId,
-        '$.contentRefId', p_contentRefId,
-        '$.seasonNumber', p_seasonNumber,
-        '$.isActive', COALESCE(p_isActive, true)
-    );
-    
-    -- Add optional fields only if they are not null
-    IF p_title IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.title', p_title);
-    END IF;
-
-    IF p_description IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.description', p_description);
-    END IF;
-
-    IF p_episodeCount IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.episodeCount', p_episodeCount);
-    END IF;
-
-    IF p_releaseDate IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.releaseDate', p_releaseDate);
-    END IF;
-
-    IF p_posterPath IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.posterPath', p_posterPath);
-    END IF;
-
-    IF p_voteAverage IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteAverage', p_voteAverage);
-    END IF;
-
-    IF p_voteCount IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteCount', p_voteCount);
-    END IF;
-    
-    RETURN result;
-END //
-
--- Function for Episodes JSON
-CREATE FUNCTION GetEpisodeJSON(
-    p_contentId UUID,
-    p_contentRefId UUID,
-    p_tmdbId VARCHAR(20),
-    p_imdbId VARCHAR(20),
-    p_rgId VARCHAR(128),
-    p_title VARCHAR(255),
-    p_altTitle VARCHAR(255),
-    p_description TEXT,
-    p_episodeNumber SMALLINT,
-    p_runtime SMALLINT UNSIGNED,
-    p_releaseDate DATE,
-    p_voteAverage DECIMAL(3,1),
-    p_voteCount INT UNSIGNED,
-    p_posterPath VARCHAR(255),
-    p_backdropPath VARCHAR(255),
-    p_isActive BOOLEAN
-) RETURNS JSON
-DETERMINISTIC
-BEGIN
-    DECLARE result JSON;
-    SET result = JSON_OBJECT();
-    
-    -- Always include non-nullable fields
-    SET result = JSON_SET(result,
-        '$.contentId', p_contentId,
-        '$.contentRefId', p_contentRefId,
-        '$.title', p_title,
-        '$.episodeNumber', p_episodeNumber,
-        '$.isActive', COALESCE(p_isActive, true)
-    );
-    
-    -- Add optional fields only if they are not null
-    IF p_tmdbId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.tmdbId', p_tmdbId);
-    END IF;
-
-    IF p_imdbId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.imdbId', p_imdbId);
-    END IF;
-
-    IF p_rgId IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.rgId', p_rgId);
-    END IF;
-
-    IF p_altTitle IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.altTitle', p_altTitle);
-    END IF;
-
-    IF p_description IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.description', p_description);
-    END IF;
-
-    IF p_runtime IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.runtime', p_runtime);
-    END IF;
-
-    IF p_releaseDate IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.releaseDate', p_releaseDate);
-    END IF;
-
-    IF p_voteAverage IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteAverage', p_voteAverage);
-    END IF;
-
-    IF p_voteCount IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.voteCount', p_voteCount);
-    END IF;
-
-    IF p_posterPath IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.posterPath', p_posterPath);
-    END IF;
-
-    IF p_backdropPath IS NOT NULL THEN
-        SET result = JSON_SET(result, '$.backdropPath', p_backdropPath);
-    END IF;
-    
-    RETURN result;
-END //
-
 -- Function to get display title considering altTitle
 CREATE FUNCTION GetDisplayTitle(originalTitle VARCHAR(255), altTitle VARCHAR(255))
 RETURNS VARCHAR(255)
@@ -862,8 +416,8 @@ END //
 
 -- Function to get only changed fields between two JSON objects
 CREATE FUNCTION GetChangedFieldsJSON(
-    old_json JSON,
-    new_json JSON
+    oldJsonData JSON,
+    newJsonData JSON
 ) RETURNS JSON
 DETERMINISTIC
 BEGIN
@@ -874,13 +428,13 @@ BEGIN
     DECLARE old_value, new_value TEXT;
     
     SET result = JSON_OBJECT();
-    SET keys_array = JSON_KEYS(JSON_MERGE_PATCH(old_json, new_json));
+    SET keys_array = JSON_KEYS(JSON_MERGE_PATCH(oldJsonData, newJsonData));
     SET i = 0;
     
     WHILE i < JSON_LENGTH(keys_array) DO
         SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
-            SET old_value = JSON_EXTRACT(old_json, CONCAT('$.', current_key));
-            SET new_value = JSON_EXTRACT(new_json, CONCAT('$.', current_key));
+            SET old_value = JSON_EXTRACT(oldJsonData, CONCAT('$.', current_key));
+            SET new_value = JSON_EXTRACT(newJsonData, CONCAT('$.', current_key));
             
             -- Unquote the values for comparison if they're not NULL
             IF old_value IS NOT NULL THEN
@@ -916,7 +470,7 @@ BEGIN
 
     SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
 
-    SET jsonData = JSON_OBJECT(
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
         'title', display_title,
         'tmdbId', NEW.tmdbId,
@@ -929,14 +483,14 @@ BEGIN
         'voteAverage', NEW.voteAverage,
         'voteCount', NEW.voteCount,
         'isActive', NEW.isActive
-    );
+    ), true);
     
     CALL LogAudit(
         'Movies', 
         NEW.contentId, 
         'insert',
         NULL,
-        GetContentDataJSON(jsonData, true),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -947,12 +501,12 @@ AFTER UPDATE ON Movies
 FOR EACH ROW
 BEGIN
     DECLARE old_display_title, new_display_title VARCHAR(255);
-    DECLARE old_json, new_json, changed_json JSON;
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
     
     SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    SET old_json = GetContentDataJSON(JSON_OBJECT(
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'title', old_display_title,
         'tmdbId', OLD.tmdbId,
@@ -967,7 +521,7 @@ BEGIN
         'isActive', OLD.isActive
     ), false);
     
-    SET new_json = GetContentDataJSON(JSON_OBJECT(
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId, 
         'title', new_display_title,
         'tmdbId', NEW.tmdbId, 
@@ -982,14 +536,14 @@ BEGIN
         'isActive', NEW.isActive
     ), false);
     
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'Movies',
             NEW.contentId,
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1002,7 +556,7 @@ BEFORE DELETE ON Movies
 FOR EACH ROW
 BEGIN
     DECLARE jsonData JSON;
-    SET jsonData = JSON_OBJECT(
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'tmdbId', OLD.tmdbId,
         'imdbId', OLD.imdbId,
@@ -1024,41 +578,43 @@ BEGIN
         'productionCompanies', OLD.productionCompanies,
         'isActive', OLD.isActive,
         'isDupe', OLD.isDupe
-    );
-
-    CALL MoviesDeleteAudit(
-       jsonData,
-       @graveyard_id
-    );
+    ), true);
+    
+    CALL MoviesDeleteAudit(jsonData);
 END //
 
 -- Series triggers
 CREATE TRIGGER Series_Insert_Audit
-BEFORE INSERT ON Series
+AFTER INSERT ON Series
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
+    DECLARE jsonData JSON;
+    
     SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'title', display_title,
+        'tmdbId', NEW.tmdbId,
+        'imdbId', NEW.imdbId,
+        'rgId', NEW.rgId,
+        'description', NEW.description,
+        'releaseDate', NEW.releaseDate,
+        'posterPath', NEW.posterPath,
+        'backdropPath', NEW.backdropPath,
+        'voteAverage', NEW.voteAverage,
+        'voteCount', NEW.voteCount,
+        'totalSeasons', NEW.totalSeasons,
+        'totalEpisodes', NEW.totalEpisodes,
+        'isActive', NEW.isActive
+    ), true);
     
     CALL LogAudit(
         'Series',
         NEW.contentId,
         'insert',
         NULL,
-        GetContentJSON(
-            NEW.contentId, 
-            display_title,
-            NEW.tmdbId, 
-            NEW.imdbId, 
-            NEW.rgId, 
-            NEW.description, 
-            NEW.releaseDate, 
-            NEW.posterPath, 
-            NEW.backdropPath, 
-            NEW.voteAverage, 
-            NEW.voteCount, 
-            NEW.isActive
-        ),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1069,12 +625,12 @@ AFTER UPDATE ON Series
 FOR EACH ROW
 BEGIN
     DECLARE old_display_title, new_display_title VARCHAR(255);
-    DECLARE old_json, new_json, changed_json JSON;
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
     
     SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    SET old_json = GetContentDataJSON(JSON_OBJECT(
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'title', old_display_title,
         'tmdbId', OLD.tmdbId,
@@ -1086,10 +642,12 @@ BEGIN
         'backdropPath', OLD.backdropPath,
         'voteAverage', OLD.voteAverage,
         'voteCount', OLD.voteCount,
+        'totalSeasons', OLD.totalSeasons,
+        'totalEpisodes', OLD.totalEpisodes,
         'isActive', OLD.isActive
     ), false);
     
-    SET new_json = GetContentDataJSON(JSON_OBJECT(
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId, 
         'title', new_display_title,
         'tmdbId', NEW.tmdbId, 
@@ -1101,17 +659,19 @@ BEGIN
         'backdropPath', NEW.backdropPath, 
         'voteAverage', NEW.voteAverage, 
         'voteCount', NEW.voteCount, 
+        'totalSeasons', NEW.totalSeasons,
+        'totalEpisodes', NEW.totalEpisodes,
         'isActive', NEW.isActive
     ), false);
     
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'Series',
             NEW.contentId,
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1123,63 +683,61 @@ CREATE TRIGGER Series_Delete_Audit
 BEFORE DELETE ON Series
 FOR EACH ROW
 BEGIN
-    DECLARE v_graveyard_id UUID;
-    CALL SeriesDeleteAudit(
-        OLD.contentId,
-        OLD.title,
-        OLD.altTitle,
-        OLD.tmdbId,
-        OLD.imdbId,
-        OLD.rgId,
-        OLD.description,
-        OLD.releaseDate,
-        OLD.posterPath,
-        OLD.backdropPath,
-        OLD.popularity,
-        OLD.voteAverage,
-        OLD.voteCount,
-        OLD.genres,
-        OLD.keywords,
-        OLD.cast,
-        OLD.crew,
-        OLD.productionCompanies,
-        OLD.networks,
-        OLD.totalSeasons,
-        OLD.totalEpisodes,
-        OLD.isActive,
-        v_graveyard_id
-    );
+    DECLARE jsonData JSON;
+    
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'tmdbId', OLD.tmdbId,
+        'imdbId', OLD.imdbId,
+        'rgId', OLD.rgId,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
+        'description', OLD.description,
+        'releaseDate', OLD.releaseDate,
+        'posterPath', OLD.posterPath,
+        'backdropPath', OLD.backdropPath,
+        'popularity', OLD.popularity,
+        'voteAverage', OLD.voteAverage,
+        'voteCount', OLD.voteCount,
+        'genres', OLD.genres,
+        'keywords', OLD.keywords,
+        'cast', OLD.cast,
+        'crew', OLD.crew,
+        'productionCompanies', OLD.productionCompanies,
+        'networks', OLD.networks,
+        'totalSeasons', OLD.totalSeasons,
+        'totalEpisodes', OLD.totalEpisodes,
+        'isActive', OLD.isActive
+    ), true);
+    
+    CALL SeriesDeleteAudit(jsonData);
 END //
 
 -- Seasons triggers
 CREATE TRIGGER Seasons_Insert_Audit
-BEFORE INSERT ON Seasons
+AFTER INSERT ON Seasons
 FOR EACH ROW
 BEGIN
-    -- Update total seasons in Series
-    UPDATE Series 
-    SET totalSeasons = totalSeasons + 1
-    WHERE contentId = NEW.contentRefId;
-
-    -- Log the audit
+    DECLARE jsonData JSON;
+    
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'title', NEW.title,
+        'seasonNumber', NEW.seasonNumber,
+        'description', NEW.description,
+        'releaseDate', NEW.releaseDate,
+        'posterPath', NEW.posterPath,
+        'episodeCount', NEW.episodeCount,
+        'isActive', NEW.isActive
+    ), true);
+    
     CALL LogAudit(
         'Seasons', 
         NEW.contentId, 
         'insert', 
         NULL,
-        GetSeasonJSON(
-            NEW.contentId,
-            NEW.contentRefId,
-            NEW.title,
-            NEW.description,
-            NEW.seasonNumber,
-            NEW.episodeCount,
-            NEW.releaseDate,
-            NEW.posterPath,
-            NEW.voteAverage,
-            NEW.voteCount,
-            NEW.isActive
-        ),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1189,45 +747,40 @@ CREATE TRIGGER Seasons_Update_Audit
 AFTER UPDATE ON Seasons
 FOR EACH ROW
 BEGIN
-    DECLARE old_json, new_json, changed_json JSON;
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
     
-    -- Set episodeCount to NULL for both old and new to ignore it in comparison
-    SET old_json = GetSeasonJSON(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.title,
-        OLD.description,
-        OLD.seasonNumber,
-        NULL,  -- Ignore episodeCount in audit
-        OLD.releaseDate,
-        OLD.posterPath,
-        OLD.voteAverage,
-        OLD.voteCount,
-        OLD.isActive
-    );
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'title', OLD.title,
+        'seasonNumber', OLD.seasonNumber,
+        'description', OLD.description,
+        'releaseDate', OLD.releaseDate,
+        'posterPath', OLD.posterPath,
+        'episodeCount', OLD.episodeCount,
+        'isActive', OLD.isActive
+    ), false);
     
-    SET new_json = GetSeasonJSON(
-        NEW.contentId,
-        NEW.contentRefId,
-        NEW.title,
-        NEW.description,
-        NEW.seasonNumber,
-        NULL,  -- Ignore episodeCount in audit
-        NEW.releaseDate,
-        NEW.posterPath,
-        NEW.voteAverage,
-        NEW.voteCount,
-        NEW.isActive
-    );
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'title', NEW.title,
+        'seasonNumber', NEW.seasonNumber,
+        'description', NEW.description,
+        'releaseDate', NEW.releaseDate,
+        'posterPath', NEW.posterPath,
+        'episodeCount', NEW.episodeCount,
+        'isActive', NEW.isActive
+    ), false);
     
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'Seasons', 
             NEW.contentId, 
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1239,81 +792,67 @@ CREATE TRIGGER Seasons_Delete_Audit
 BEFORE DELETE ON Seasons
 FOR EACH ROW
 BEGIN
-    DECLARE v_graveyard_id UUID;
-    DECLARE v_series_id UUID;
-
-    -- First get the series ID if it exists
-    SELECT contentId INTO v_series_id
-    FROM Series
-    WHERE contentId = OLD.contentRefId
-    LIMIT 1;
-
-    -- Delete all related Episodes
-    DELETE FROM Episodes WHERE contentRefId = OLD.contentId;
-
-    -- Update parent Series if it exists
-    IF v_series_id IS NOT NULL THEN
-        UPDATE Series 
-        SET totalSeasons = GREATEST(0, totalSeasons - 1)
-        WHERE contentId = v_series_id;
-    END IF;
-
-    CALL SeasonsDeleteAudit(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.title,
-        OLD.description,
-        OLD.seasonNumber,
-        OLD.episodeCount,
-        OLD.releaseDate,
-        OLD.posterPath,
-        OLD.voteAverage,
-        OLD.voteCount,
-        OLD.isActive,
-        v_graveyard_id
-    );
+    DECLARE jsonData JSON;
+    
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'title', OLD.title,
+        'seasonNumber', OLD.seasonNumber,
+        'description', OLD.description,
+        'releaseDate', OLD.releaseDate,
+        'posterPath', OLD.posterPath,
+        'episodeCount', OLD.episodeCount,
+        'isActive', OLD.isActive
+    ), true);
+    
+    CALL SeasonsDeleteAudit(jsonData);
 END //
 
 -- Episodes triggers
 CREATE TRIGGER Episodes_Insert_Audit
-BEFORE INSERT ON Episodes
+AFTER INSERT ON Episodes
 FOR EACH ROW
 BEGIN
-    -- Update episode count in Seasons
+    DECLARE display_title VARCHAR(255);
+    DECLARE jsonData JSON;
+    DECLARE v_series_id UUID;
+    
+    -- Get the series ID from the season
+    SELECT s.contentRefId INTO v_series_id
+    FROM Seasons s
+    WHERE s.contentId = NEW.contentRefId;
+    
+    -- Update episode count in Seasons table
     UPDATE Seasons 
     SET episodeCount = episodeCount + 1
     WHERE contentId = NEW.contentRefId;
-
-    -- Update total episodes in Series
-    UPDATE Series serie
-    INNER JOIN Seasons season ON season.contentRefId = serie.contentId
-    SET serie.totalEpisodes = serie.totalEpisodes + 1
-    WHERE season.contentId = NEW.contentRefId;
-
-    -- Log the audit
+    
+    -- Update episode count in Series table
+    UPDATE Series
+    SET totalEpisodes = totalEpisodes + 1
+    WHERE contentId = v_series_id;
+    
+    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'title', display_title,
+        'episodeNumber', NEW.episodeNumber,
+        'description', NEW.description,
+        'releaseDate', NEW.releaseDate,
+        'runtime', NEW.runtime,
+        'voteAverage', NEW.voteAverage,
+        'voteCount', NEW.voteCount,
+        'isActive', NEW.isActive
+    ), false);
+    
     CALL LogAudit(
         'Episodes',
         NEW.contentId,
         'insert',
         NULL,
-        GetEpisodeJSON(
-            NEW.contentId,
-            NEW.contentRefId,
-            NEW.tmdbId,
-            NEW.imdbId,
-            NEW.rgId,
-            NEW.title,
-            NEW.altTitle,
-            NEW.description,
-            NEW.episodeNumber,
-            NEW.runtime,
-            NEW.releaseDate,
-            NEW.voteAverage,
-            NEW.voteCount,
-            NEW.posterPath,
-            NEW.backdropPath,
-            NEW.isActive
-        ),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1323,54 +862,46 @@ CREATE TRIGGER Episodes_Update_Audit
 AFTER UPDATE ON Episodes
 FOR EACH ROW
 BEGIN
-    DECLARE old_json, new_json, changed_json JSON;
+    DECLARE old_display_title, new_display_title VARCHAR(255);
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
     
-    SET old_json = GetEpisodeJSON(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.tmdbId,
-        OLD.imdbId,
-        OLD.rgId,
-        OLD.title,
-        OLD.altTitle,
-        OLD.description,
-        OLD.episodeNumber,
-        OLD.runtime,
-        OLD.releaseDate,
-        OLD.voteAverage,
-        OLD.voteCount,
-        OLD.posterPath,
-        OLD.backdropPath,
-        OLD.isActive
-    );
+    SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
+    SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    SET new_json = GetEpisodeJSON(
-        NEW.contentId,
-        NEW.contentRefId,
-        NEW.tmdbId,
-        NEW.imdbId,
-        NEW.rgId,
-        NEW.title,
-        NEW.altTitle,
-        NEW.description,
-        NEW.episodeNumber,
-        NEW.runtime,
-        NEW.releaseDate,
-        NEW.voteAverage,
-        NEW.voteCount,
-        NEW.posterPath,
-        NEW.backdropPath,
-        NEW.isActive
-    );
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'title', old_display_title,
+        'episodeNumber', OLD.episodeNumber,
+        'description', OLD.description,
+        'releaseDate', OLD.releaseDate,
+        'runtime', OLD.runtime,
+        'voteAverage', OLD.voteAverage,
+        'voteCount', OLD.voteCount,
+        'isActive', OLD.isActive
+    ), false);
     
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'title', new_display_title,
+        'episodeNumber', NEW.episodeNumber,
+        'description', NEW.description,
+        'releaseDate', NEW.releaseDate,
+        'runtime', NEW.runtime,
+        'voteAverage', NEW.voteAverage,
+        'voteCount', NEW.voteCount,
+        'isActive', NEW.isActive
+    ), false);
+    
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'Episodes', 
             NEW.contentId, 
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1382,58 +913,23 @@ CREATE TRIGGER Episodes_Delete_Audit
 BEFORE DELETE ON Episodes
 FOR EACH ROW
 BEGIN
-    DECLARE v_graveyard_id UUID;
-    DECLARE v_series_id UUID;
-    DECLARE v_season_id UUID;
-    DECLARE v_episode_count INT;
-
-    -- First get the season ID and its current episode count if it exists
-    SELECT contentId, episodeCount INTO v_season_id, v_episode_count
-    FROM Seasons
-    WHERE contentId = OLD.contentRefId
-    LIMIT 1;
-
-    -- If we found a season, get its series and update counts
-    IF v_season_id IS NOT NULL THEN
-        -- Get the series ID if it exists
-        SELECT serie.contentId INTO v_series_id
-        FROM Series serie
-        INNER JOIN Seasons season ON serie.contentId = season.contentRefId
-        WHERE season.contentId = v_season_id
-        LIMIT 1;
-
-        -- Update season's episode count
-        UPDATE Seasons 
-        SET episodeCount = GREATEST(0, v_episode_count - 1)
-        WHERE contentId = v_season_id;
-
-        -- Update series total episodes if we found a series
-        IF v_series_id IS NOT NULL THEN
-            UPDATE Series
-            SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
-            WHERE contentId = v_series_id;
-        END IF;
-    END IF;
-
-    CALL EpisodesDeleteAudit(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.tmdbId,
-        OLD.imdbId,
-        OLD.rgId,
-        OLD.title,
-        OLD.altTitle,
-        OLD.description,
-        OLD.episodeNumber,
-        OLD.runtime,
-        OLD.releaseDate,
-        OLD.voteAverage,
-        OLD.voteCount,
-        OLD.posterPath,
-        OLD.backdropPath,
-        OLD.isActive,
-        v_graveyard_id
-    );
+    DECLARE jsonData JSON;
+    
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
+        'episodeNumber', OLD.episodeNumber,
+        'description', OLD.description,
+        'releaseDate', OLD.releaseDate,
+        'runtime', OLD.runtime,
+        'voteAverage', OLD.voteAverage,
+        'voteCount', OLD.voteCount,
+        'isActive', OLD.isActive
+    ), true);
+    
+    CALL EpisodesDeleteAudit(jsonData);
 END //
 
 -- Create trigger to update Series.seasonContentIds when a new season is added
@@ -1450,6 +946,7 @@ CREATE TRIGGER MoviesDeeplinks_Insert_Audit
 BEFORE INSERT ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
+    DECLARE jsonData JSON;
     DECLARE inherited_title VARCHAR(255);
     DECLARE inherited_tmdbId VARCHAR(20);
     DECLARE inherited_releaseDate DATE;
@@ -1486,31 +983,35 @@ BEGIN
         SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     END IF;
     
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'tmdbId', NEW.tmdbId,
+        'title', NEW.title,
+        'altTitle', NEW.altTitle,
+        'releaseDate', NEW.releaseDate,
+        'altReleaseDate', NEW.altReleaseDate,
+        'sourceId', NEW.sourceId,
+        'sourceType', NEW.sourceType,
+        'originSource', NEW.originSource,
+        'region', NEW.region,
+        'web', NEW.web,
+        'android', NEW.android,
+        'iOS', NEW.iOS,
+        'androidTv', NEW.androidTv,
+        'fireTv', NEW.fireTv,
+        'lg', NEW.lg,
+        'samsung', NEW.samsung,
+        'tvOS', NEW.tvOS,
+        'roku', NEW.roku
+    ), true);
+
     CALL LogAudit(
         'MoviesDeeplinks', 
         NEW.contentId, 
         'insert', 
         NULL,
-        GetDeeplinkJSON(
-            NEW.contentId, 
-            NEW.contentRefId, 
-            display_title,
-            NEW.sourceId, 
-            NEW.sourceType, 
-            NEW.originSource, 
-            NEW.region, 
-            NEW.web,
-            NEW.android,
-            NEW.iOS,
-            NEW.androidTv,
-            NEW.fireTv,
-            NEW.lg,
-            NEW.samsung,
-            NEW.tvOS,
-            NEW.roku,
-            NEW.isActive,
-            NEW.tmdbId
-        ),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1521,61 +1022,62 @@ AFTER UPDATE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
     DECLARE old_display_title, new_display_title VARCHAR(255);
-    DECLARE old_json, new_json, changed_json JSON;
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
+    DECLARE jsonData JSON;
     
     SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    SET old_json = GetDeeplinkJSON(
-        OLD.contentId, 
-        OLD.contentRefId, 
-        old_display_title,
-        OLD.sourceId, 
-        OLD.sourceType, 
-        OLD.originSource, 
-        OLD.region, 
-        OLD.web,
-        OLD.android,
-        OLD.iOS,
-        OLD.androidTv,
-        OLD.fireTv,
-        OLD.lg,
-        OLD.samsung,
-        OLD.tvOS,
-        OLD.roku,
-        OLD.isActive,
-        OLD.tmdbId
-    );
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'title', old_display_title,
+        'sourceId', OLD.sourceId,
+        'sourceType', OLD.sourceType,
+        'originSource', OLD.originSource,
+        'region', OLD.region,
+        'web', OLD.web,
+        'android', OLD.android,
+        'iOS', OLD.iOS,
+        'androidTv', OLD.androidTv,
+        'fireTv', OLD.fireTv,
+        'lg', OLD.lg,
+        'samsung', OLD.samsung,
+        'tvOS', OLD.tvOS,
+        'roku', OLD.roku,
+        'isActive', OLD.isActive,
+        'tmdbId', OLD.tmdbId
+    ), false);
     
-    SET new_json = GetDeeplinkJSON(
-        NEW.contentId, 
-        NEW.contentRefId, 
-        new_display_title,
-        NEW.sourceId, 
-        NEW.sourceType, 
-        NEW.originSource, 
-        NEW.region, 
-        NEW.web,
-        NEW.android,
-        NEW.iOS,
-        NEW.androidTv,
-        NEW.fireTv,
-        NEW.lg,
-        NEW.samsung,
-        NEW.tvOS,
-        NEW.roku,
-        NEW.isActive,
-        NEW.tmdbId
-    );
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'title', new_display_title,
+        'sourceId', NEW.sourceId,
+        'sourceType', NEW.sourceType,
+        'originSource', NEW.originSource,
+        'region', NEW.region,
+        'web', NEW.web,
+        'android', NEW.android,
+        'iOS', NEW.iOS,
+        'androidTv', NEW.androidTv,
+        'fireTv', NEW.fireTv,
+        'lg', NEW.lg,
+        'samsung', NEW.samsung,
+        'tvOS', NEW.tvOS,
+        'roku', NEW.roku,
+        'isActive', NEW.isActive,
+        'tmdbId', NEW.tmdbId
+    ), false);
     
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'MoviesDeeplinks', 
             NEW.contentId, 
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1587,31 +1089,33 @@ CREATE TRIGGER MoviesDeeplinks_Delete_Audit
 BEFORE DELETE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
-    DECLARE v_graveyard_id UUID;
-    CALL MoviesDeeplinksDeleteAudit(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.tmdbId,
-        OLD.title,
-        OLD.altTitle,
-        OLD.releaseDate,
-        OLD.altReleaseDate,
-        OLD.sourceId,
-        OLD.sourceType,
-        OLD.originSource,
-        OLD.region,
-        OLD.web,
-        OLD.android,
-        OLD.iOS,
-        OLD.androidTv,
-        OLD.fireTv,
-        OLD.lg,
-        OLD.samsung,
-        OLD.tvOS,
-        OLD.roku,
-        OLD.isActive,
-        v_graveyard_id
-    );
+    DECLARE jsonData JSON;
+
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'tmdbId', OLD.tmdbId,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
+        'releaseDate', OLD.releaseDate,
+        'altReleaseDate', OLD.altReleaseDate,
+        'sourceId', OLD.sourceId,
+        'sourceType', OLD.sourceType,
+        'originSource', OLD.originSource,
+        'region', OLD.region,
+        'web', OLD.web,
+        'android', OLD.android,
+        'iOS', OLD.iOS,
+        'androidTv', OLD.androidTv,
+        'fireTv', OLD.fireTv,
+        'lg', OLD.lg,
+        'samsung', OLD.samsung,
+        'tvOS', OLD.tvOS,
+        'roku', OLD.roku,
+        'isActive', OLD.isActive
+    ), true);
+
+    CALL MoviesDeeplinksDeleteAudit(jsonData);
 END //
 
 -- SeriesDeeplinks triggers
@@ -1623,6 +1127,28 @@ BEGIN
     DECLARE inherited_tmdbId VARCHAR(20);
     DECLARE inherited_releaseDate DATE;
     DECLARE display_title VARCHAR(255);
+    DECLARE jsonData JSON;
+
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+            'contentRefId', NEW.contentRefId,
+            'title', NEW.title,
+            'sourceId', NEW.sourceId,
+            'sourceType', NEW.sourceType,
+            'originSource', NEW.originSource,
+            'region', NEW.region,
+            'web', NEW.web,
+            'android', NEW.android,
+            'iOS', NEW.iOS,
+            'androidTv', NEW.androidTv,
+            'fireTv', NEW.fireTv,
+            'lg', NEW.lg,
+            'samsung', NEW.samsung,
+            'tvOS', NEW.tvOS,
+            'roku', NEW.roku,
+            'isActive', NEW.isActive,
+            'tmdbId', NEW.tmdbId
+    ), true);
     
     -- If contentRefId exists, get data from Episodes table
     IF NEW.contentRefId IS NOT NULL THEN
@@ -1661,26 +1187,7 @@ BEGIN
         NEW.contentId, 
         'insert', 
         NULL,
-        GetDeeplinkJSON(
-            NEW.contentId, 
-            NEW.contentRefId, 
-            display_title,
-            NEW.sourceId, 
-            NEW.sourceType, 
-            NEW.originSource, 
-            NEW.region, 
-            NEW.web,
-            NEW.android,
-            NEW.iOS,
-            NEW.androidTv,
-            NEW.fireTv,
-            NEW.lg,
-            NEW.samsung,
-            NEW.tvOS,
-            NEW.roku,
-            NEW.isActive,
-            NEW.tmdbId
-        ),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1691,61 +1198,61 @@ AFTER UPDATE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
     DECLARE old_display_title, new_display_title VARCHAR(255);
-    DECLARE old_json, new_json, changed_json JSON;
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
     
     SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
     SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     
-    SET old_json = GetDeeplinkJSON(
-        OLD.contentId, 
-        OLD.contentRefId, 
-        old_display_title,
-        OLD.sourceId, 
-        OLD.sourceType, 
-        OLD.originSource, 
-        OLD.region, 
-        OLD.web,
-        OLD.android,
-        OLD.iOS,
-        OLD.androidTv,
-        OLD.fireTv,
-        OLD.lg,
-        OLD.samsung,
-        OLD.tvOS,
-        OLD.roku,
-        OLD.isActive,
-        OLD.tmdbId
-    );
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'title', old_display_title,
+        'sourceId', OLD.sourceId,
+        'sourceType', OLD.sourceType,
+        'originSource', OLD.originSource,
+        'region', OLD.region,
+        'web', OLD.web,
+        'android', OLD.android,
+        'iOS', OLD.iOS,
+        'androidTv', OLD.androidTv,
+        'fireTv', OLD.fireTv,
+        'lg', OLD.lg,
+        'samsung', OLD.samsung,
+        'tvOS', OLD.tvOS,
+        'roku', OLD.roku,
+        'isActive', OLD.isActive,
+        'tmdbId', OLD.tmdbId
+    ), false);
     
-    SET new_json = GetDeeplinkJSON(
-        NEW.contentId, 
-        NEW.contentRefId, 
-        new_display_title,
-        NEW.sourceId, 
-        NEW.sourceType, 
-        NEW.originSource, 
-        NEW.region, 
-        NEW.web,
-        NEW.android,
-        NEW.iOS,
-        NEW.androidTv,
-        NEW.fireTv,
-        NEW.lg,
-        NEW.samsung,
-        NEW.tvOS,
-        NEW.roku,
-        NEW.isActive,
-        NEW.tmdbId
-    );
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId, 
+        'contentRefId', NEW.contentRefId, 
+        'title', new_display_title,
+        'sourceId', NEW.sourceId, 
+        'sourceType', NEW.sourceType, 
+        'originSource', NEW.originSource, 
+        'region', NEW.region, 
+        'web', NEW.web,
+        'android', NEW.android,
+        'iOS', NEW.iOS,
+        'androidTv', NEW.androidTv,
+        'fireTv', NEW.fireTv,
+        'lg', NEW.lg,
+        'samsung', NEW.samsung,
+        'tvOS', NEW.tvOS,
+        'roku', NEW.roku,
+        'isActive', NEW.isActive,
+        'tmdbId', NEW.tmdbId
+    ), false);
     
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'SeriesDeeplinks', 
             NEW.contentId, 
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1757,31 +1264,33 @@ CREATE TRIGGER SeriesDeeplinks_Delete_Audit
 BEFORE DELETE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
-    DECLARE v_graveyard_id UUID;
-    CALL SeriesDeeplinksDeleteAudit(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.tmdbId,
-        OLD.title,
-        OLD.altTitle,
-        OLD.releaseDate,
-        OLD.altReleaseDate,
-        OLD.sourceId,
-        OLD.sourceType,
-        OLD.originSource,
-        OLD.region,
-        OLD.web,
-        OLD.android,
-        OLD.iOS,
-        OLD.androidTv,
-        OLD.fireTv,
-        OLD.lg,
-        OLD.samsung,
-        OLD.tvOS,
-        OLD.roku,
-        OLD.isActive,
-        v_graveyard_id
-    );
+    DECLARE jsonData JSON;
+    
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'tmdbId', OLD.tmdbId,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
+        'releaseDate', OLD.releaseDate,
+        'altReleaseDate', OLD.altReleaseDate,
+        'sourceId', OLD.sourceId,
+        'sourceType', OLD.sourceType,
+        'originSource', OLD.originSource,
+        'region', OLD.region,
+        'web', OLD.web,
+        'android', OLD.android,
+        'iOS', OLD.iOS,
+        'androidTv', OLD.androidTv,
+        'fireTv', OLD.fireTv,
+        'lg', OLD.lg,
+        'samsung', OLD.samsung,
+        'tvOS', OLD.tvOS,
+        'roku', OLD.roku,
+        'isActive', OLD.isActive
+    ), true);
+
+    CALL SeriesDeeplinksDeleteAudit(jsonData);
 END //
 
 -- MoviesPrices triggers with correct number of arguments
@@ -1789,35 +1298,27 @@ CREATE TRIGGER MoviesPrices_Insert_Audit
 BEFORE INSERT ON MoviesPrices
 FOR EACH ROW
 BEGIN
+    DECLARE jsonData JSON;
+
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'region', NEW.region,
+        'buySD', NEW.buySD,
+        'buyHD', NEW.buyHD,
+        'buyUHD', NEW.buyUHD,
+        'rentSD', NEW.rentSD,
+        'rentHD', NEW.rentHD,
+        'rentUHD', NEW.rentUHD,
+        'isActive', NEW.isActive
+    ), true);
+
     CALL LogAudit(
         'MoviesPrices', 
         NEW.contentId, 
         'insert',
         NULL,
-        GetPriceJSON(
-            NEW.contentId,
-            NEW.contentRefId,
-            NEW.region,
-            NEW.buySD,
-            NEW.buyHD,
-            NEW.buyUHD,
-            NEW.rentSD,
-            NEW.rentHD,
-            NEW.rentUHD,
-            NULL,  -- seriesBuySD
-            NULL,  -- seriesBuyHD
-            NULL,  -- seriesBuyUHD
-            NULL,  -- seriesRentSD
-            NULL,  -- seriesRentHD
-            NULL,  -- seriesRentUHD
-            NULL,  -- seasonBuySD
-            NULL,  -- seasonBuyHD
-            NULL,  -- seasonBuyUHD
-            NULL,  -- seasonRentSD
-            NULL,  -- seasonRentHD
-            NULL,  -- seasonRentUHD
-            NEW.isActive
-        ),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1827,66 +1328,42 @@ CREATE TRIGGER MoviesPrices_Update_Audit
 AFTER UPDATE ON MoviesPrices
 FOR EACH ROW
 BEGIN
-    DECLARE old_json, new_json, changed_json JSON;
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
     
-    SET old_json = GetPriceJSON(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.region,
-        OLD.buySD,
-        OLD.buyHD,
-        OLD.buyUHD,
-        OLD.rentSD,
-        OLD.rentHD,
-        OLD.rentUHD,
-        NULL,  -- seriesBuySD
-        NULL,  -- seriesBuyHD
-        NULL,  -- seriesBuyUHD
-        NULL,  -- seriesRentSD
-        NULL,  -- seriesRentHD
-        NULL,  -- seriesRentUHD
-        NULL,  -- seasonBuySD
-        NULL,  -- seasonBuyHD
-        NULL,  -- seasonBuyUHD
-        NULL,  -- seasonRentSD
-        NULL,  -- seasonRentHD
-        NULL,  -- seasonRentUHD
-        OLD.isActive
-    );
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'region', OLD.region,
+        'buySD', OLD.buySD,
+        'buyHD', OLD.buyHD,
+        'buyUHD', OLD.buyUHD,
+        'rentSD', OLD.rentSD,
+        'rentHD', OLD.rentHD,
+        'rentUHD', OLD.rentUHD,
+        'isActive', OLD.isActive
+    ), false);
     
-    SET new_json = GetPriceJSON(
-        NEW.contentId,
-        NEW.contentRefId,
-        NEW.region,
-        NEW.buySD,
-        NEW.buyHD,
-        NEW.buyUHD,
-        NEW.rentSD,
-        NEW.rentHD,
-        NEW.rentUHD,
-        NULL,  -- seriesBuySD
-        NULL,  -- seriesBuyHD
-        NULL,  -- seriesBuyUHD
-        NULL,  -- seriesRentSD
-        NULL,  -- seriesRentHD
-        NULL,  -- seriesRentUHD
-        NULL,  -- seasonBuySD
-        NULL,  -- seasonBuyHD
-        NULL,  -- seasonBuyUHD
-        NULL,  -- seasonRentSD
-        NULL,  -- seasonRentHD
-        NULL,  -- seasonRentUHD
-        NEW.isActive
-    );
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'region', NEW.region,
+        'buySD', NEW.buySD,
+        'buyHD', NEW.buyHD,
+        'buyUHD', NEW.buyUHD,
+        'rentSD', NEW.rentSD,
+        'rentHD', NEW.rentHD,
+        'rentUHD', NEW.rentUHD,
+        'isActive', NEW.isActive
+    ), false);
     
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'MoviesPrices', 
             NEW.contentId, 
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1898,20 +1375,22 @@ CREATE TRIGGER MoviesPrices_Delete_Audit
 BEFORE DELETE ON MoviesPrices
 FOR EACH ROW
 BEGIN
-    DECLARE v_graveyard_id UUID;
-    CALL MoviesPricesDeleteAudit(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.region,
-        OLD.buySD,
-        OLD.buyHD,
-        OLD.buyUHD,
-        OLD.rentSD,
-        OLD.rentHD,
-        OLD.rentUHD,
-        OLD.isActive,
-        v_graveyard_id
-    );
+    DECLARE jsonData JSON;
+
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'region', OLD.region,
+        'buySD', OLD.buySD,
+        'buyHD', OLD.buyHD,
+        'buyUHD', OLD.buyUHD,
+        'rentSD', OLD.rentSD,
+        'rentHD', OLD.rentHD,
+        'rentUHD', OLD.rentUHD,
+        'isActive', OLD.isActive
+    ), true);
+
+    CALL MoviesPricesDeleteAudit(jsonData);
 END //
 
 -- SeriesPrices triggers
@@ -1919,12 +1398,39 @@ CREATE TRIGGER SeriesPrices_Insert_Audit
 BEFORE INSERT ON SeriesPrices
 FOR EACH ROW
 BEGIN
+    DECLARE jsonData JSON;
+
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'region', NEW.region,
+        'buySD', NEW.buySD,
+        'buyHD', NEW.buyHD,
+        'buyUHD', NEW.buyUHD,
+        'rentSD', NEW.rentSD,
+        'rentHD', NEW.rentHD,
+        'rentUHD', NEW.rentUHD,
+        'seriesBuySD', NEW.seriesBuySD,
+        'seriesBuyHD', NEW.seriesBuyHD,
+        'seriesBuyUHD', NEW.seriesBuyUHD,
+        'seriesRentSD', NEW.seriesRentSD,
+        'seriesRentHD', NEW.seriesRentHD,
+        'seriesRentUHD', NEW.seriesRentUHD,
+        'seasonBuySD', NEW.seasonBuySD,
+        'seasonBuyHD', NEW.seasonBuyHD,
+        'seasonBuyUHD', NEW.seasonBuyUHD,
+        'seasonRentSD', NEW.seasonRentSD,
+        'seasonRentHD', NEW.seasonRentHD,
+        'seasonRentUHD', NEW.seasonRentUHD,
+        'isActive', NEW.isActive
+    ), true);
+
     CALL LogAudit(
         'SeriesPrices', 
         NEW.contentId, 
         'insert',
         NULL,
-        GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive),
+        jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
@@ -1934,20 +1440,65 @@ CREATE TRIGGER SeriesPrices_Update_Audit
 AFTER UPDATE ON SeriesPrices
 FOR EACH ROW
 BEGIN
-    DECLARE old_json, new_json, changed_json JSON;
-    
-    SET old_json = GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive);
-    
-    SET new_json = GetPriceJSON(NEW.contentId, NEW.contentRefId, NEW.region, NEW.buySD, NEW.buyHD, NEW.buyUHD, NEW.rentSD, NEW.rentHD, NEW.rentUHD, NEW.seriesBuySD, NEW.seriesBuyHD, NEW.seriesBuyUHD, NEW.seriesRentSD, NEW.seriesRentHD, NEW.seriesRentUHD, NEW.seasonBuySD, NEW.seasonBuyHD, NEW.seasonBuyUHD, NEW.seasonRentSD, NEW.seasonRentHD, NEW.seasonRentUHD, NEW.isActive);
-    
-    SET changed_json = GetChangedFieldsJSON(old_json, new_json);
+    DECLARE oldJsonData, newJsonData, changed_json JSON;
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'region', OLD.region,
+        'buySD', OLD.buySD,
+        'buyHD', OLD.buyHD,
+        'buyUHD', OLD.buyUHD,
+        'rentSD', OLD.rentSD,
+        'rentHD', OLD.rentHD,
+        'rentUHD', OLD.rentUHD,
+        'seriesBuySD', OLD.seriesBuySD,
+        'seriesBuyHD', OLD.seriesBuyHD,
+        'seriesBuyUHD', OLD.seriesBuyUHD,
+        'seriesRentSD', OLD.seriesRentSD,
+        'seriesRentHD', OLD.seriesRentHD,
+        'seriesRentUHD', OLD.seriesRentUHD,
+        'seasonBuySD', OLD.seasonBuySD,
+        'seasonBuyHD', OLD.seasonBuyHD,
+        'seasonBuyUHD', OLD.seasonBuyUHD,
+        'seasonRentSD', OLD.seasonRentSD,
+        'seasonRentHD', OLD.seasonRentHD,
+        'seasonRentUHD', OLD.seasonRentUHD,
+        'isActive', OLD.isActive
+    ), true);
+
+    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', NEW.contentId,
+        'contentRefId', NEW.contentRefId,
+        'region', NEW.region,
+        'buySD', NEW.buySD,
+        'buyHD', NEW.buyHD,
+        'buyUHD', NEW.buyUHD,
+        'rentSD', NEW.rentSD,
+        'rentHD', NEW.rentHD,
+        'rentUHD', NEW.rentUHD,
+        'seriesBuySD', NEW.seriesBuySD,
+        'seriesBuyHD', NEW.seriesBuyHD,
+        'seriesBuyUHD', NEW.seriesBuyUHD,
+        'seriesRentSD', NEW.seriesRentSD,
+        'seriesRentHD', NEW.seriesRentHD,
+        'seriesRentUHD', NEW.seriesRentUHD,
+        'seasonBuySD', NEW.seasonBuySD,
+        'seasonBuyHD', NEW.seasonBuyHD,
+        'seasonBuyUHD', NEW.seasonBuyUHD,
+        'seasonRentSD', NEW.seasonRentSD,
+        'seasonRentHD', NEW.seasonRentHD,
+        'seasonRentUHD', NEW.seasonRentUHD,
+        'isActive', NEW.isActive
+    ), true);        
+
+    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
     
     IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
         CALL LogAudit(
             'SeriesPrices', 
             NEW.contentId, 
             'update',
-            old_json,
+            oldJsonData,
             changed_json,
             COALESCE(@username, 'system'),
             COALESCE(@appContext, 'system')
@@ -1959,32 +1510,33 @@ CREATE TRIGGER SeriesPrices_Delete_Audit
 BEFORE DELETE ON SeriesPrices
 FOR EACH ROW
 BEGIN
-    DECLARE v_graveyard_id UUID;
-    CALL SeriesPricesDeleteAudit(
-        OLD.contentId,
-        OLD.contentRefId,
-        OLD.region,
-        OLD.buySD,
-        OLD.buyHD,
-        OLD.buyUHD,
-        OLD.rentSD,
-        OLD.rentHD,
-        OLD.rentUHD,
-        OLD.seriesBuySD,
-        OLD.seriesBuyHD,
-        OLD.seriesBuyUHD,
-        OLD.seriesRentSD,
-        OLD.seriesRentHD,
-        OLD.seriesRentUHD,
-        OLD.seasonBuySD,
-        OLD.seasonBuyHD,
-        OLD.seasonBuyUHD,
-        OLD.seasonRentSD,
-        OLD.seasonRentHD,
-        OLD.seasonRentUHD,
-        OLD.isActive,
-        v_graveyard_id
-    );
+    DECLARE jsonData JSON;
+    SET jsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentId', OLD.contentId,
+        'contentRefId', OLD.contentRefId,
+        'region', OLD.region,
+        'buySD', OLD.buySD,
+        'buyHD', OLD.buyHD,
+        'buyUHD', OLD.buyUHD,
+        'rentSD', OLD.rentSD,
+        'rentHD', OLD.rentHD,
+        'rentUHD', OLD.rentUHD,
+        'seriesBuySD', OLD.seriesBuySD,
+        'seriesBuyHD', OLD.seriesBuyHD,
+        'seriesBuyUHD', OLD.seriesBuyUHD,
+        'seriesRentSD', OLD.seriesRentSD,
+        'seriesRentHD', OLD.seriesRentHD,
+        'seriesRentUHD', OLD.seriesRentUHD,
+        'seasonBuySD', OLD.seasonBuySD,
+        'seasonBuyHD', OLD.seasonBuyHD,
+        'seasonBuyUHD', OLD.seasonBuyUHD,
+        'seasonRentSD', OLD.seasonRentSD,
+        'seasonRentHD', OLD.seasonRentHD,
+        'seasonRentUHD', OLD.seasonRentUHD,
+        'isActive', OLD.isActive
+    ), true);
+
+    CALL SeriesPricesDeleteAudit(jsonData);
 END //
 
 
@@ -2026,27 +1578,48 @@ BEGIN
 END //
 
 CREATE PROCEDURE CreateGraveyardItem(
-    contentType TEXT,
-    sourceType TEXT,
-    actionType TEXT,
-    reason TEXT,
+    dataContentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices'),
+    dataSourceType TEXT,
+    dataReason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other'),
+    dataDetails TEXT,
     jsonData JSON
 )
 BEGIN
-    DECLARE graveyardId UUID;
-    SET graveyardId = UUID_v7();
+    DECLARE thisDataContent ENUM('Movies', 'Series', 'Seasons', 'Episodes');
+    DECLARE contentIdType UUID;
 
+    CASE dataContentType
+        WHEN dataContentType = 'Movies' THEN 
+            SET contentIdType = JSON_VALUE(jsonData, '$.contentId');
+        WHEN dataContentType = 'Series' THEN 
+            SET contentIdType = JSON_VALUE(jsonData, '$.contentId');
+        ELSE 
+            SET contentIdType = JSON_VALUE(jsonData, '$.contentRefId');
+    END CASE;
+    
     INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        graveyardId,
-        JSON_EXTRACT(jsonData, '$.contentId'),
-        contentType,
-        JSON_EXTRACT(jsonData, '$.tmdbId'),
-        sourceType,
-        COALESCE(JSON_EXTRACT(jsonData, '$.altTitle'), JSON_EXTRACT(jsonData, '$.title')),
-        actionType,
+        id,
+        contentRefId,
         reason,
+        contentType,
+        sourceId,
+        sourceType,
+        title,
+        altTitle,
+        details,
+        rawData,
+        username,
+        appContext
+    ) VALUES (
+        UUID_v7(),
+        contentIdType,
+        dataReason,
+        dataContentType,
+        JSON_VALUE(jsonData, '$.tmdbId'),
+        dataSourceType,
+        JSON_VALUE(jsonData, '$.title'),
+        JSON_VALUE(jsonData, '$.altTitle'),
+        dataDetails,
         jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -2055,14 +1628,12 @@ END //
 
 -- Movies delete audit procedure
 CREATE PROCEDURE MoviesDeleteAudit(
-    IN jsonData JSON,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
     -- Delete all related
-    DELETE FROM MoviesDeeplinks WHERE contentRefId = JSON_EXTRACT(jsonData, '$.contentId');
+    DELETE FROM MoviesDeeplinks WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
 
-    -- Insert into Graveyard
     CALL CreateGraveyardItem(
         'Movies',
         'tmdb',
@@ -2074,7 +1645,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'Movies',
-        JSON_EXTRACT(jsonData, '$.contentId'),
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
         jsonData,
         NULL,
@@ -2084,96 +1655,26 @@ BEGIN
 END //
 
 CREATE PROCEDURE SeriesDeleteAudit(
-    IN p_contentId UUID,
-    IN p_title VARCHAR(255),
-    IN p_altTitle VARCHAR(255),
-    IN p_tmdbId VARCHAR(20),
-    IN p_imdbId VARCHAR(20),
-    IN p_rgId VARCHAR(128),
-    IN p_description TEXT,
-    IN p_releaseDate DATE,
-    IN p_posterPath VARCHAR(255),
-    IN p_backdropPath VARCHAR(255),
-    IN p_popularity DECIMAL(10,2),
-    IN p_voteAverage DECIMAL(3,1),
-    IN p_voteCount INT,
-    IN p_genres JSON,
-    IN p_keywords JSON,
-    IN p_cast JSON,
-    IN p_crew JSON,
-    IN p_productionCompanies JSON,
-    IN p_networks JSON,
-    IN p_totalSeasons INT,
-    IN p_totalEpisodes INT,
-    IN p_isActive BOOLEAN,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
     -- Delete all related
-    DELETE FROM Seasons WHERE contentRefId = p_contentId;
+    DELETE FROM Seasons WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
 
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
-    
-    -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    CALL CreateGraveyardItem(
         'Series',
-        p_tmdbId,
         'tmdb',
-        COALESCE(p_altTitle, p_title),
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'tmdbId', p_tmdbId,
-            'imdbId', p_imdbId,
-            'rgId', p_rgId,
-            'title', p_title,
-            'altTitle', p_altTitle,
-            'description', p_description,
-            'releaseDate', p_releaseDate,
-            'posterPath', p_posterPath,
-            'backdropPath', p_backdropPath,
-            'popularity', p_popularity,
-            'voteAverage', p_voteAverage,
-            'voteCount', p_voteCount,
-            'genres', p_genres,
-            'keywords', p_keywords,
-            'cast', p_cast,
-            'crew', p_crew,
-            'productionCompanies', p_productionCompanies,
-            'networks', p_networks,
-            'totalSeasons', p_totalSeasons,
-            'totalEpisodes', p_totalEpisodes,
-            'isActive', p_isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
 
     -- Log audit
     CALL LogAudit(
         'Series',
-        p_contentId,
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
-        GetContentJSON(
-            p_contentId,
-            GetDisplayTitle(p_title, p_altTitle),
-            p_tmdbId,
-            p_imdbId,
-            p_rgId,
-            p_description,
-            p_releaseDate,
-            p_posterPath,
-            p_backdropPath,
-            p_voteAverage,
-            p_voteCount,
-            p_isActive
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -2181,74 +1682,39 @@ BEGIN
 END //
 
 CREATE PROCEDURE SeasonsDeleteAudit(
-    IN p_contentId UUID,
-    IN p_contentRefId UUID,
-    IN p_title VARCHAR(255),
-    IN p_description TEXT,
-    IN p_seasonNumber SMALLINT,
-    IN p_episodeCount SMALLINT,
-    IN p_releaseDate DATE,
-    IN p_posterPath VARCHAR(255),
-    IN p_voteAverage DECIMAL(3,1),
-    IN p_voteCount INT,
-    IN p_isActive BOOLEAN,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
-    -- Delete all related
-    DELETE FROM Episodes WHERE contentRefId = p_contentId;
-
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
+    DELETE FROM Episodes WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
+    -- First get the series ID if it exists
+    -- SELECT contentId INTO v_series_id
+    -- FROM Series
+    -- WHERE contentId = JSON_EXTRACT(jsonData, '$.contentRefId')
+    -- LIMIT 1;
     
-    -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    -- Delete all related Episodes
+
+    -- Update parent Series if it exists
+    -- IF v_series_id IS NOT NULL THEN
+    --     UPDATE Series 
+    --     SET totalSeasons = GREATEST(0, totalSeasons - 1)
+    --     WHERE contentId = v_series_id;
+    -- END IF;
+    
+    CALL CreateGraveyardItem(
         'Seasons',
-        p_contentRefId,
         'tmdb',
-        p_title,
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'contentRefId', p_contentRefId,
-            'title', p_title,
-            'description', p_description,
-            'seasonNumber', p_seasonNumber,
-            'episodeCount', p_episodeCount,
-            'releaseDate', p_releaseDate,
-            'posterPath', p_posterPath,
-            'voteAverage', p_voteAverage,
-            'voteCount', p_voteCount,
-            'isActive', p_isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
-
+    
     -- Log audit
     CALL LogAudit(
         'Seasons',
-        p_contentId,
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
-        GetContentJSON(
-            p_contentId,
-            p_title,
-            NULL,
-            NULL,
-            NULL,
-            p_description,
-            p_releaseDate,
-            p_posterPath,
-            NULL,
-            p_voteAverage,
-            p_voteCount,
-            p_isActive
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -2256,84 +1722,56 @@ BEGIN
 END //
 
 CREATE PROCEDURE EpisodesDeleteAudit(
-    IN p_contentId UUID,
-    IN p_contentRefId UUID,
-    IN p_tmdbId VARCHAR(20),
-    IN p_imdbId VARCHAR(20),
-    IN p_rgId VARCHAR(128),
-    IN p_title VARCHAR(255),
-    IN p_altTitle VARCHAR(255),
-    IN p_description TEXT,
-    IN p_episodeNumber SMALLINT,
-    IN p_runtime INT,
-    IN p_releaseDate DATE,
-    IN p_voteAverage DECIMAL(3,1),
-    IN p_voteCount INT,
-    IN p_posterPath VARCHAR(255),
-    IN p_backdropPath VARCHAR(255),
-    IN p_isActive BOOLEAN,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
-    -- Delete all related
-    DELETE FROM SeriesDeeplinks WHERE contentRefId = p_contentId;
-
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
+    DECLARE v_series_id UUID;
+    DECLARE v_season_id UUID;
+    DECLARE v_episode_count INT;
     
-    -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    DELETE FROM SeriesDeeplinks WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
+    -- First get the season ID and its current episode count if it exists
+    -- SELECT contentId, episodeCount INTO v_season_id, v_episode_count
+    -- FROM Seasons
+    -- WHERE contentId = JSON_EXTRACT(jsonData, '$.contentRefId')
+    -- LIMIT 1;
+    
+    -- -- If we found a season, get its series and update counts
+    -- IF v_season_id IS NOT NULL THEN
+    --     -- Get the series ID if it exists
+    --     SELECT serie.contentId INTO v_series_id
+    --     FROM Series serie
+    --     INNER JOIN Seasons season ON serie.contentId = season.contentRefId
+    --     WHERE season.contentId = v_season_id
+    --     LIMIT 1;
+        
+    --     -- Update season's episode count
+    --     UPDATE Seasons 
+    --     SET episodeCount = GREATEST(0, v_episode_count - 1)
+    --     WHERE contentId = v_season_id;
+        
+    --     -- Update series total episodes if we found a series
+    --     IF v_series_id IS NOT NULL THEN
+    --         UPDATE Series
+    --         SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
+    --         WHERE contentId = v_series_id;
+    --     END IF;
+    -- END IF;
+    
+    CALL CreateGraveyardItem(
         'Episodes',
-        p_contentRefId,
         'tmdb',
-        p_title,
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'contentRefId', p_contentRefId,
-            'tmdbId', p_tmdbId,
-            'imdbId', p_imdbId,
-            'rgId', p_rgId,
-            'title', p_title,
-            'altTitle', p_altTitle,
-            'description', p_description,
-            'episodeNumber', p_episodeNumber,
-            'runtime', p_runtime,
-            'releaseDate', p_releaseDate,
-            'voteAverage', p_voteAverage,
-            'voteCount', p_voteCount,
-            'posterPath', p_posterPath,
-            'backdropPath', p_backdropPath,
-            'isActive', p_isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
-
+    
     -- Log audit
     CALL LogAudit(
         'Episodes',
-        p_contentId,
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
-        GetContentJSON(
-            p_contentId,
-            p_title,
-            p_tmdbId,
-            p_imdbId,
-            p_rgId,
-            p_description,
-            p_releaseDate,
-            p_posterPath,
-            p_backdropPath,
-            p_voteAverage,
-            p_voteCount,
-            p_isActive
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -2341,100 +1779,26 @@ BEGIN
 END //
 
 CREATE PROCEDURE MoviesDeeplinksDeleteAudit(
-    IN p_contentId UUID,
-    IN p_contentRefId UUID,
-    IN p_tmdbId VARCHAR(20),
-    IN p_title VARCHAR(255),
-    IN p_altTitle VARCHAR(255),
-    IN p_releaseDate DATE,
-    IN p_altReleaseDate DATE,
-    IN p_sourceId SMALLINT,
-    IN p_sourceType VARCHAR(64),
-    IN p_originSource VARCHAR(64),
-    IN p_region VARCHAR(10),
-    IN p_web VARCHAR(512),
-    IN p_android VARCHAR(512),
-    IN p_iOS VARCHAR(512),
-    IN p_androidTv VARCHAR(512),
-    IN p_fireTv VARCHAR(512),
-    IN p_lg VARCHAR(512),
-    IN p_samsung VARCHAR(512),
-    IN p_tvOS VARCHAR(512),
-    IN p_roku VARCHAR(512),
-    IN p_isActive BOOLEAN,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
     -- Delete all related
-    DELETE FROM MoviesPrices WHERE contentRefId = p_contentId;
+    DELETE FROM MoviesPrices WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
 
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
-    
-    -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    CALL CreateGraveyardItem(
         'MoviesDeeplinks',
-        p_sourceId,
-        p_sourceType,
-        COALESCE(p_altTitle, p_title),
+        'tmdb',
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'contentRefId', p_contentRefId,
-            'tmdbId', p_tmdbId,
-            'title', p_title,
-            'altTitle', p_altTitle,
-            'releaseDate', p_releaseDate,
-            'altReleaseDate', p_altReleaseDate,
-            'sourceId', p_sourceId,
-            'sourceType', p_sourceType,
-            'originSource', p_originSource,
-            'region', p_region,
-            'web', p_web,
-            'android', p_android,
-            'iOS', p_iOS,
-            'androidTv', p_androidTv,
-            'fireTv', p_fireTv,
-            'lg', p_lg,
-            'samsung', p_samsung,
-            'tvOS', p_tvOS,
-            'roku', p_roku,
-            'isActive', p_isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
 
     -- Log audit
     CALL LogAudit(
         'MoviesDeeplinks',
-        p_contentId,
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
-        GetDeeplinkJSON(
-            p_contentId,
-            p_contentRefId,
-            COALESCE(p_altTitle, p_title),
-            p_sourceId,
-            p_sourceType,
-            p_originSource,
-            p_region,
-            p_web,
-            p_android,
-            p_iOS,
-            p_androidTv,
-            p_fireTv,
-            p_lg,
-            p_samsung,
-            p_tvOS,
-            p_roku,
-            p_isActive,
-            p_tmdbId
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -2442,100 +1806,26 @@ BEGIN
 END //
 
 CREATE PROCEDURE SeriesDeeplinksDeleteAudit(
-    IN p_contentId UUID,
-    IN p_contentRefId UUID,
-    IN p_tmdbId VARCHAR(20),
-    IN p_title VARCHAR(255),
-    IN p_altTitle VARCHAR(255),
-    IN p_releaseDate DATE,
-    IN p_altReleaseDate DATE,
-    IN p_sourceId SMALLINT,
-    IN p_sourceType VARCHAR(64),
-    IN p_originSource VARCHAR(64),
-    IN p_region VARCHAR(10),
-    IN p_web VARCHAR(512),
-    IN p_android VARCHAR(512),
-    IN p_iOS VARCHAR(512),
-    IN p_androidTv VARCHAR(512),
-    IN p_fireTv VARCHAR(512),
-    IN p_lg VARCHAR(512),
-    IN p_samsung VARCHAR(512),
-    IN p_tvOS VARCHAR(512),
-    IN p_roku VARCHAR(512),
-    IN p_isActive BOOLEAN,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
     -- Delete all related
-    DELETE FROM SeriesPrices WHERE contentRefId = p_contentId;
+    DELETE FROM SeriesPrices WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
 
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
-    
-    -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    CALL CreateGraveyardItem(
         'SeriesDeeplinks',
-        p_sourceId,
-        p_sourceType,
-        COALESCE(p_altTitle, p_title),
+        'tmdb',
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'contentRefId', p_contentRefId,
-            'tmdbId', p_tmdbId,
-            'title', p_title,
-            'altTitle', p_altTitle,
-            'releaseDate', p_releaseDate,
-            'altReleaseDate', p_altReleaseDate,
-            'sourceId', p_sourceId,
-            'sourceType', p_sourceType,
-            'originSource', p_originSource,
-            'region', p_region,
-            'web', p_web,
-            'android', p_android,
-            'iOS', p_iOS,
-            'androidTv', p_androidTv,
-            'fireTv', p_fireTv,
-            'lg', p_lg,
-            'samsung', p_samsung,
-            'tvOS', p_tvOS,
-            'roku', p_roku,
-            'isActive', p_isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
 
     -- Log audit
     CALL LogAudit(
         'SeriesDeeplinks',
-        p_contentId,
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
-        GetDeeplinkJSON(
-            p_contentId,
-            p_contentRefId,
-            COALESCE(p_altTitle, p_title),
-            p_sourceId,
-            p_sourceType,
-            p_originSource,
-            p_region,
-            p_web,
-            p_android,
-            p_iOS,
-            p_androidTv,
-            p_fireTv,
-            p_lg,
-            p_samsung,
-            p_tvOS,
-            p_roku,
-            p_isActive,
-            p_tmdbId
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -2543,71 +1833,23 @@ BEGIN
 END //
 
 CREATE PROCEDURE MoviesPricesDeleteAudit(
-    IN p_contentId UUID,
-    IN p_contentRefId UUID,
-    IN p_region VARCHAR(10),
-    IN p_buySD DECIMAL(10,2),
-    IN p_buyHD DECIMAL(10,2),
-    IN p_buyUHD DECIMAL(10,2),
-    IN p_rentSD DECIMAL(10,2),
-    IN p_rentHD DECIMAL(10,2),
-    IN p_rentUHD DECIMAL(10,2),
-    IN p_isActive BOOLEAN,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
-    
-    -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    CALL CreateGraveyardItem(
         'MoviesPrices',
-        p_contentRefId,
         'tmdb',
-        NULL,
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'contentRefId', p_contentRefId,
-            'region', p_region,
-            'buySD', p_buySD,
-            'buyHD', p_buyHD,
-            'buyUHD', p_buyUHD,
-            'rentSD', p_rentSD,
-            'rentHD', p_rentHD,
-            'rentUHD', p_rentUHD,
-            'isActive', p_isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
 
     -- Log audit
     CALL LogAudit(
         'MoviesPrices',
-        p_contentId,
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
-        GetPriceJSON(
-            p_contentId,
-            p_contentRefId,
-            p_region,
-            p_buySD,
-            p_buyHD,
-            p_buyUHD,
-            p_rentSD,
-            p_rentHD,
-            p_rentUHD,
-            NULL, NULL, NULL,
-            NULL, NULL, NULL,
-            NULL, NULL, NULL,
-            NULL, NULL, NULL,
-            p_isActive
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
@@ -2615,87 +1857,23 @@ BEGIN
 END //
 
 CREATE PROCEDURE SeriesPricesDeleteAudit(
-    IN p_contentId UUID,
-    IN p_contentRefId UUID,
-    IN p_region VARCHAR(10),
-    IN p_seriesBuySD DECIMAL(10,2),
-    IN p_seriesBuyHD DECIMAL(10,2),
-    IN p_seriesBuyUHD DECIMAL(10,2),
-    IN p_seriesRentSD DECIMAL(10,2),
-    IN p_seriesRentHD DECIMAL(10,2),
-    IN p_seriesRentUHD DECIMAL(10,2),
-    IN p_seasonBuySD DECIMAL(10,2),
-    IN p_seasonBuyHD DECIMAL(10,2),
-    IN p_seasonBuyUHD DECIMAL(10,2),
-    IN p_seasonRentSD DECIMAL(10,2),
-    IN p_seasonRentHD DECIMAL(10,2),
-    IN p_seasonRentUHD DECIMAL(10,2),
-    IN p_isActive BOOLEAN,
-    OUT p_graveyardId UUID
+    IN jsonData JSON
 )
 BEGIN
-    -- Generate UUID for Graveyard
-    SET p_graveyardId = UUID_v7();
-    
-    -- Insert into Graveyard
-    INSERT INTO Graveyard (
-        id, contentRefId, contentType, sourceId, sourceType, title, reason, details, rawData, username, appContext
-    ) VALUES (
-        p_graveyardId,
-        p_contentId,
+    CALL CreateGraveyardItem(
         'SeriesPrices',
-        p_contentRefId,
         'tmdb',
-        NULL,
         'deleted',
         'Deleted by user',
-        JSON_OBJECT(
-            'contentId', p_contentId,
-            'contentRefId', p_contentRefId,
-            'region', p_region,
-            'seriesBuySD', p_seriesBuySD,
-            'seriesBuyHD', p_seriesBuyHD,
-            'seriesBuyUHD', p_seriesBuyUHD,
-            'seriesRentSD', p_seriesRentSD,
-            'seriesRentHD', p_seriesRentHD,
-            'seriesRentUHD', p_seriesRentUHD,
-            'seasonBuySD', p_seasonBuySD,
-            'seasonBuyHD', p_seasonBuyHD,
-            'seasonBuyUHD', p_seasonBuyUHD,
-            'seasonRentSD', p_seasonRentSD,
-            'seasonRentHD', p_seasonRentHD,
-            'seasonRentUHD', p_seasonRentUHD,
-            'isActive', p_isActive
-        ),
-        COALESCE(@username, 'system'),
-        COALESCE(@appContext, 'system')
+        jsonData
     );
 
     -- Log audit
     CALL LogAudit(
         'SeriesPrices',
-        p_contentId,
+        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
         'delete',
-        GetPriceJSON(
-            p_contentId,
-            p_contentRefId,
-            p_region,
-            NULL, NULL, NULL,
-            NULL, NULL, NULL,
-            p_seriesBuySD,
-            p_seriesBuyHD,
-            p_seriesBuyUHD,
-            p_seriesRentSD,
-            p_seriesRentHD,
-            p_seriesRentUHD,
-            p_seasonBuySD,
-            p_seasonBuyHD,
-            p_seasonBuyUHD,
-            p_seasonRentSD,
-            p_seasonRentHD,
-            p_seasonRentUHD,
-            p_isActive
-        ),
+        jsonData,
         NULL,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
