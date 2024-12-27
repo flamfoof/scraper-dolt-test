@@ -131,7 +131,7 @@ CREATE TABLE Episodes (
     CONSTRAINT EpisodesUuid_UK UNIQUE KEY (contentId),
     CONSTRAINT EpisodesNumber_UK UNIQUE KEY (contentRefId, episodeNumber),
     CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
-        REFERENCES Seasons(contentId) 
+        REFERENCES Seasons(contentId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movie Deeplinks table for storing platform-specific movie links
@@ -376,8 +376,8 @@ BEGIN
     SET i = 0;
     
     WHILE i < JSON_LENGTH(keys_array) DO
-        SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
-        SET current_value = JSON_UNQUOTE(JSON_EXTRACT(jsonData, CONCAT('$.', current_key)));
+        SET current_key = JSON_VALUE(keys_array, CONCAT('$[', i, ']'));
+        SET current_value = JSON_VALUE(jsonData, CONCAT('$.', current_key));
         SET jsonType = JSON_TYPE(JSON_EXTRACT(jsonData, CONCAT('$.', current_key)));
         
         CASE jsonType
@@ -432,26 +432,26 @@ BEGIN
     SET i = 0;
     
     WHILE i < JSON_LENGTH(keys_array) DO
-        SET current_key = JSON_UNQUOTE(JSON_EXTRACT(keys_array, CONCAT('$[', i, ']')));
-            SET old_value = JSON_EXTRACT(oldJsonData, CONCAT('$.', current_key));
-            SET new_value = JSON_EXTRACT(newJsonData, CONCAT('$.', current_key));
-            
-            -- Unquote the values for comparison if they're not NULL
-            IF old_value IS NOT NULL THEN
-                SET old_value = JSON_UNQUOTE(old_value);
-            END IF;
-            IF new_value IS NOT NULL THEN
-                SET new_value = JSON_UNQUOTE(new_value);
-            END IF;
-            
-            IF (old_value IS NULL AND new_value IS NOT NULL) OR 
-               (old_value IS NOT NULL AND new_value IS NULL) OR 
-               (old_value <> new_value) THEN
-            -- Use JSON_MERGE_PATCH to combine the existing result with a new JSON_OBJECT
-            SET result = JSON_MERGE_PATCH(
-                result,
-                JSON_OBJECT(current_key, new_value)
-            );
+        SET current_key = JSON_VALUE(keys_array, CONCAT('$[', i, ']'));
+        SET old_value = JSON_VALUE(oldJsonData, CONCAT('$.', current_key));
+        SET new_value = JSON_VALUE(newJsonData, CONCAT('$.', current_key));
+        
+        -- Unquote the values for comparison if they're not NULL
+        IF old_value IS NOT NULL THEN
+            SET old_value = old_value;
+        END IF;
+        IF new_value IS NOT NULL THEN
+            SET new_value = new_value;
+        END IF;
+        
+        IF (old_value IS NULL AND new_value IS NOT NULL) OR 
+            (old_value IS NOT NULL AND new_value IS NULL) OR 
+            (old_value <> new_value) THEN
+        -- Use JSON_MERGE_PATCH to combine the existing result with a new JSON_OBJECT
+        SET result = JSON_MERGE_PATCH(
+            result,
+            JSON_OBJECT(current_key, new_value)
+        );
         END IF;
         SET i = i + 1;
     END WHILE;
@@ -713,6 +713,8 @@ BEGIN
     CALL SeriesDeleteAudit(jsonData);
 END //
 
+
+
 -- Seasons triggers
 CREATE TRIGGER Seasons_Insert_Audit
 AFTER INSERT ON Seasons
@@ -793,9 +795,9 @@ BEFORE DELETE ON Seasons
 FOR EACH ROW
 BEGIN
     DECLARE jsonData JSON;
-    
+
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', OLD.contentId,
+        'contentId', @contentId,
         'contentRefId', OLD.contentRefId,
         'title', OLD.title,
         'seasonNumber', OLD.seasonNumber,
@@ -1632,7 +1634,7 @@ CREATE PROCEDURE MoviesDeleteAudit(
 )
 BEGIN
     -- Delete all related
-    DELETE FROM MoviesDeeplinks WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
+    DELETE FROM MoviesDeeplinks WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     CALL CreateGraveyardItem(
         'Movies',
@@ -1645,7 +1647,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'Movies',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
@@ -1659,7 +1661,7 @@ CREATE PROCEDURE SeriesDeleteAudit(
 )
 BEGIN
     -- Delete all related
-    DELETE FROM Seasons WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
+    DELETE FROM Seasons WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     CALL CreateGraveyardItem(
         'Series',
@@ -1672,7 +1674,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'Series',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
@@ -1685,7 +1687,10 @@ CREATE PROCEDURE SeasonsDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
-    DELETE FROM Episodes WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
+    DECLARE vContentRefId UUID;
+    SET vContentRefId = JSON_VALUE(jsonData, '$.contentRefId');
+    
+    DELETE FROM Episodes WHERE contentRefId = vContentRefId;
     -- First get the series ID if it exists
     -- SELECT contentId INTO v_series_id
     -- FROM Series
@@ -1712,7 +1717,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'Seasons',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
@@ -1728,35 +1733,41 @@ BEGIN
     DECLARE v_series_id UUID;
     DECLARE v_season_id UUID;
     DECLARE v_episode_count INT;
+    DECLARE vContentRefId UUID;
+    SET vContentRefId = JSON_VALUE(jsonData, '$.contentRefId');
     
-    DELETE FROM SeriesDeeplinks WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
-    -- First get the season ID and its current episode count if it exists
-    -- SELECT contentId, episodeCount INTO v_season_id, v_episode_count
-    -- FROM Seasons
-    -- WHERE contentId = JSON_EXTRACT(jsonData, '$.contentRefId')
-    -- LIMIT 1;
+    DELETE FROM SeriesDeeplinks WHERE contentRefId = vContentRefId;
     
-    -- -- If we found a season, get its series and update counts
-    -- IF v_season_id IS NOT NULL THEN
-    --     -- Get the series ID if it exists
-    --     SELECT serie.contentId INTO v_series_id
-    --     FROM Series serie
-    --     INNER JOIN Seasons season ON serie.contentId = season.contentRefId
-    --     WHERE season.contentId = v_season_id
-    --     LIMIT 1;
+    -- First get the series ID if it exists
+    SELECT contentId INTO v_series_id
+    FROM Series
+    WHERE contentId = vContentRefId
+    LIMIT 1;
+    
+    -- First get the season ID if it exists
+    SELECT contentId INTO v_season_id
+    FROM Seasons
+    WHERE contentId = vContentRefId
+    LIMIT 1;
+    
+    -- Update parent Series if it exists
+    IF v_series_id IS NOT NULL THEN
+        UPDATE Series 
+        SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
+        WHERE contentId = v_series_id;
+    END IF;
+    
+    -- Update parent Season if it exists
+    IF v_season_id IS NOT NULL THEN
+        SELECT totalEpisodes INTO v_episode_count
+        FROM Seasons
+        WHERE contentId = v_season_id
+        LIMIT 1;
         
-    --     -- Update season's episode count
-    --     UPDATE Seasons 
-    --     SET episodeCount = GREATEST(0, v_episode_count - 1)
-    --     WHERE contentId = v_season_id;
-        
-    --     -- Update series total episodes if we found a series
-    --     IF v_series_id IS NOT NULL THEN
-    --         UPDATE Series
-    --         SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
-    --         WHERE contentId = v_series_id;
-    --     END IF;
-    -- END IF;
+        UPDATE Seasons 
+        SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
+        WHERE contentId = v_season_id;
+    END IF;
     
     CALL CreateGraveyardItem(
         'Episodes',
@@ -1769,7 +1780,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'Episodes',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
@@ -1783,7 +1794,7 @@ CREATE PROCEDURE MoviesDeeplinksDeleteAudit(
 )
 BEGIN
     -- Delete all related
-    DELETE FROM MoviesPrices WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
+    DELETE FROM MoviesPrices WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     CALL CreateGraveyardItem(
         'MoviesDeeplinks',
@@ -1796,7 +1807,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'MoviesDeeplinks',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
@@ -1810,7 +1821,7 @@ CREATE PROCEDURE SeriesDeeplinksDeleteAudit(
 )
 BEGIN
     -- Delete all related
-    DELETE FROM SeriesPrices WHERE contentRefId = JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId'));
+    DELETE FROM SeriesPrices WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     CALL CreateGraveyardItem(
         'SeriesDeeplinks',
@@ -1823,7 +1834,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'SeriesDeeplinks',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
@@ -1847,7 +1858,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'MoviesPrices',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
@@ -1871,7 +1882,7 @@ BEGIN
     -- Log audit
     CALL LogAudit(
         'SeriesPrices',
-        JSON_UNQUOTE(JSON_EXTRACT(jsonData, '$.contentId')),
+        JSON_VALUE(jsonData, '$.contentId'),
         'delete',
         jsonData,
         NULL,
