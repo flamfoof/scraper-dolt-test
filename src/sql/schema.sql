@@ -279,6 +279,17 @@ CREATE TABLE AuditLog (
     CONSTRAINT PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE Users (
+    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    firstName VARCHAR(64) NOT NULL,
+    lastName VARCHAR(64) NOT NULL,
+    email VARCHAR(128) NOT NULL,
+    password VARCHAR(128) NOT NULL,
+    role VARCHAR(64) NOT NULL,
+    PRIMARY KEY (id)
+);
+
 -- Indexes for AuditLog table
 CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
 CREATE INDEX AuditLogUser_IDX USING BTREE ON AuditLog (username);
