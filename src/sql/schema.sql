@@ -102,7 +102,7 @@ CREATE TABLE Seasons (
     CONSTRAINT SeasonsUuid_UK UNIQUE KEY (contentId),
     CONSTRAINT SeasonsNumber_UK UNIQUE KEY (contentRefId, seasonNumber),
     CONSTRAINT SeasonsSeries_FK FOREIGN KEY (contentRefId) 
-        REFERENCES Series(contentId)
+        REFERENCES Series(contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episodes table
@@ -131,7 +131,7 @@ CREATE TABLE Episodes (
     CONSTRAINT EpisodesUuid_UK UNIQUE KEY (contentId),
     CONSTRAINT EpisodesNumber_UK UNIQUE KEY (contentRefId, episodeNumber),
     CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
-        REFERENCES Seasons(contentId)
+        REFERENCES Seasons(contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movie Deeplinks table for storing platform-specific movie links
@@ -165,7 +165,7 @@ CREATE TABLE MoviesDeeplinks (
     CONSTRAINT MoviesDeeplinksContent_UK UNIQUE KEY (contentId),
     CONSTRAINT MoviesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
     CONSTRAINT MoviesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
-        REFERENCES Movies(contentId) 
+        REFERENCES Movies(contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episode Deeplinks table for storing platform-specific episode links
@@ -199,7 +199,7 @@ CREATE TABLE SeriesDeeplinks (
     CONSTRAINT SeriesDeeplinksContent_UK UNIQUE KEY (contentId),
     CONSTRAINT SeriesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
     CONSTRAINT SeriesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
-        REFERENCES Episodes(contentId) 
+        REFERENCES Episodes(contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movies Prices table for storing movie pricing information
@@ -221,9 +221,8 @@ CREATE TABLE MoviesPrices (
     isActive BOOLEAN DEFAULT true NOT NULL,
     PRIMARY KEY (id),
     CONSTRAINT MoviesPricesContent_UK UNIQUE KEY (contentRefId, region),
-    CONSTRAINT MoviesPricesDeeplinks_FK
-        FOREIGN KEY (contentRefId)
-        REFERENCES MoviesDeeplinks (contentId)
+    CONSTRAINT MoviesPricesDeeplinks_FK FOREIGN KEY (contentRefId)
+        REFERENCES MoviesDeeplinks (contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episodes Prices table for storing TV content pricing information
@@ -261,9 +260,8 @@ CREATE TABLE SeriesPrices (
     isActive BOOLEAN DEFAULT true NOT NULL,
     PRIMARY KEY (id),
     CONSTRAINT SeriesPricesContent_UK UNIQUE KEY (contentRefId, region),
-    CONSTRAINT SeriesPricesDeeplinks_FK
-        FOREIGN KEY (contentRefId)
-        REFERENCES SeriesDeeplinks (contentId)
+    CONSTRAINT SeriesPricesDeeplinks_FK FOREIGN KEY (contentRefId)
+        REFERENCES SeriesDeeplinks (contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Audit Log for tracking all significant changes
@@ -627,12 +625,10 @@ BEGIN
     DECLARE old_display_title, new_display_title VARCHAR(255);
     DECLARE oldJsonData, newJsonData, changed_json JSON;
     
-    SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
-    SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
-    
     SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
-        'title', old_display_title,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
         'tmdbId', OLD.tmdbId,
         'imdbId', OLD.imdbId,
         'rgId', OLD.rgId,
@@ -649,7 +645,8 @@ BEGIN
     
     SET newJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId, 
-        'title', new_display_title,
+        'title', NEW.title,
+        'altTitle', NEW.altTitle,
         'tmdbId', NEW.tmdbId, 
         'imdbId', NEW.imdbId, 
         'rgId', NEW.rgId, 
@@ -797,7 +794,7 @@ BEGIN
     DECLARE jsonData JSON;
 
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', @contentId,
+        'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
         'title', OLD.title,
         'seasonNumber', OLD.seasonNumber,
@@ -835,11 +832,11 @@ BEGIN
     SET totalEpisodes = totalEpisodes + 1
     WHERE contentId = v_series_id;
     
-    SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
         'contentRefId', NEW.contentRefId,
-        'title', display_title,
+        'title', NEW.title,
+        'altTitle', NEW.altTitle,
         'episodeNumber', NEW.episodeNumber,
         'description', NEW.description,
         'releaseDate', NEW.releaseDate,
@@ -867,13 +864,11 @@ BEGIN
     DECLARE old_display_title, new_display_title VARCHAR(255);
     DECLARE oldJsonData, newJsonData, changed_json JSON;
     
-    SET old_display_title = GetDisplayTitle(OLD.title, OLD.altTitle);
-    SET new_display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
-    
     SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
-        'title', old_display_title,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
         'episodeNumber', OLD.episodeNumber,
         'description', OLD.description,
         'releaseDate', OLD.releaseDate,
@@ -886,7 +881,8 @@ BEGIN
     SET newJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
         'contentRefId', NEW.contentRefId,
-        'title', new_display_title,
+        'title', NEW.title,
+        'altTitle', NEW.altTitle,
         'episodeNumber', NEW.episodeNumber,
         'description', NEW.description,
         'releaseDate', NEW.releaseDate,
@@ -1661,6 +1657,7 @@ CREATE PROCEDURE SeriesDeleteAudit(
 )
 BEGIN
     -- Delete all related
+    UPDATE Seasons SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
     DELETE FROM Seasons WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     CALL CreateGraveyardItem(
@@ -1687,25 +1684,37 @@ CREATE PROCEDURE SeasonsDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
-    DECLARE vContentRefId UUID;
-    SET vContentRefId = JSON_VALUE(jsonData, '$.contentRefId');
-    
-    DELETE FROM Episodes WHERE contentRefId = vContentRefId;
-    -- First get the series ID if it exists
-    -- SELECT contentId INTO v_series_id
-    -- FROM Series
-    -- WHERE contentId = JSON_EXTRACT(jsonData, '$.contentRefId')
-    -- LIMIT 1;
-    
-    -- Delete all related Episodes
+    UPDATE Episodes SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
+    SET @seasonIsActive = JSON_VALUE(jsonData, '$.isActive');
 
-    -- Update parent Series if it exists
-    -- IF v_series_id IS NOT NULL THEN
-    --     UPDATE Series 
-    --     SET totalSeasons = GREATEST(0, totalSeasons - 1)
-    --     WHERE contentId = v_series_id;
-    -- END IF;
-    
+    if(@seasonIsActive = 0) THEN
+        DELETE FROM Seasons WHERE contentId = JSON_VALUE(jsonData, '$.contentId');
+    END IF;
+    -- Store episode count before deletion
+    SET @season_episode_count = (
+        SELECT COUNT(*) 
+        FROM Episodes 
+        WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId')
+    );
+    SET @series_id = JSON_VALUE(jsonData, '$.contentRefId');
+    UPDATE Seasons SET isActive = false WHERE contentId = @series_id;
+    SET @seriesIsActive = (
+        SELECT isActive 
+        FROM Series 
+        WHERE contentId = @series_id
+    );
+
+    -- Delete all episodes
+    DELETE FROM Episodes WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
+
+    -- Update series total episodes if we have a series ID
+    IF @seriesIsActive = 1 AND @season_episode_count > 0 THEN
+        UPDATE Series 
+        SET totalEpisodes = GREATEST(0, totalEpisodes - @season_episode_count),
+            totalSeasons = totalSeasons - 1
+        WHERE contentId = @series_id;
+    END IF;
+
     CALL CreateGraveyardItem(
         'Seasons',
         'tmdb',
@@ -1713,7 +1722,7 @@ BEGIN
         'Deleted by user',
         jsonData
     );
-    
+
     -- Log audit
     CALL LogAudit(
         'Seasons',
@@ -1730,45 +1739,37 @@ CREATE PROCEDURE EpisodesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
-    DECLARE v_series_id UUID;
     DECLARE v_season_id UUID;
-    DECLARE v_episode_count INT;
-    DECLARE vContentRefId UUID;
-    SET vContentRefId = JSON_VALUE(jsonData, '$.contentRefId');
+    DECLARE v_series_id UUID;
     
-    DELETE FROM SeriesDeeplinks WHERE contentRefId = vContentRefId;
+    SET v_season_id = JSON_VALUE(jsonData, '$.contentRefId');
+
+    DELETE FROM SeriesDeeplinks WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
     
-    -- First get the series ID if it exists
-    SELECT contentId INTO v_series_id
-    FROM Series
-    WHERE contentId = vContentRefId
-    LIMIT 1;
+    -- Get the series ID if it exists
+    -- IF v_season_id IS NOT NULL THEN
+    --     SELECT contentRefId INTO v_series_id
+    --     FROM Seasons
+    --     WHERE contentId = v_season_id
+    --     LIMIT 1;
+    -- END IF;
+
+    -- -- Delete deeplinks first
+    -- DELETE FROM SeriesDeeplinks WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
     
-    -- First get the season ID if it exists
-    SELECT contentId INTO v_season_id
-    FROM Seasons
-    WHERE contentId = vContentRefId
-    LIMIT 1;
-    
-    -- Update parent Series if it exists
-    IF v_series_id IS NOT NULL THEN
-        UPDATE Series 
-        SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
-        WHERE contentId = v_series_id;
-    END IF;
-    
-    -- Update parent Season if it exists
-    IF v_season_id IS NOT NULL THEN
-        SELECT totalEpisodes INTO v_episode_count
-        FROM Seasons
-        WHERE contentId = v_season_id
-        LIMIT 1;
+    -- -- Update counts in parent tables
+    -- IF v_season_id IS NOT NULL THEN
+    --     UPDATE Seasons 
+    --     SET episodeCount = GREATEST(0, episodeCount - 1)
+    --     WHERE contentId = v_season_id;
         
-        UPDATE Seasons 
-        SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
-        WHERE contentId = v_season_id;
-    END IF;
-    
+    --     IF v_series_id IS NOT NULL THEN
+    --         UPDATE Series
+    --         SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
+    --         WHERE contentId = v_series_id;
+    --     END IF;
+    -- END IF;
+
     CALL CreateGraveyardItem(
         'Episodes',
         'tmdb',

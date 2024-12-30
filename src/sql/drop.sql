@@ -1,10 +1,8 @@
+Drop database if exists Tmdb;
 CREATE DATABASE IF NOT EXISTS `Tmdb`;
 USE Tmdb;
-
 DELIMITER //
-
 DROP PROCEDURE IF EXISTS DropAllProcedures //
-
 CREATE PROCEDURE DropAllProcedures()
 BEGIN
     DECLARE done INT DEFAULT FALSE;
