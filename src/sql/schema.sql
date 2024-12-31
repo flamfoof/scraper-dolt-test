@@ -16,7 +16,7 @@ DELIMITER ;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- Core Movies table
-CREATE TABLE Movies (
+CREATE OR REPLACE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     tmdbId VARCHAR(20) NULL,
@@ -48,7 +48,7 @@ CREATE TABLE Movies (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- TV Series table
-CREATE TABLE Series (
+CREATE OR REPLACE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     tmdbId VARCHAR(20) NULL,
@@ -82,7 +82,7 @@ CREATE TABLE Series (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Seasons table
-CREATE TABLE Seasons (
+CREATE OR REPLACE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     contentRefId UUID NULL COMMENT 'Reference to Series.contentId',
@@ -106,7 +106,7 @@ CREATE TABLE Seasons (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episodes table
-CREATE TABLE Episodes (
+CREATE OR REPLACE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     contentRefId UUID NULL COMMENT 'Reference to Seasons.contentId',
@@ -135,7 +135,7 @@ CREATE TABLE Episodes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movie Deeplinks table for storing platform-specific movie links
-CREATE TABLE MoviesDeeplinks (
+CREATE OR REPLACE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     contentRefId UUID NULL COMMENT 'Reference to Movies.contentId',
@@ -169,7 +169,7 @@ CREATE TABLE MoviesDeeplinks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episode Deeplinks table for storing platform-specific episode links
-CREATE TABLE SeriesDeeplinks (
+CREATE OR REPLACE TABLE SeriesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     contentRefId UUID NULL COMMENT 'Reference to Episodes.contentId',
@@ -203,7 +203,7 @@ CREATE TABLE SeriesDeeplinks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movies Prices table for storing movie pricing information
-CREATE TABLE MoviesPrices (
+CREATE OR REPLACE TABLE MoviesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
     contentRefId UUID NULL COMMENT 'Reference to MoviesDeeplinks.contentId',
@@ -226,7 +226,7 @@ CREATE TABLE MoviesPrices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Episodes Prices table for storing TV content pricing information
-CREATE TABLE SeriesPrices (
+CREATE OR REPLACE TABLE SeriesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
     contentRefId UUID NULL COMMENT 'Reference to SeriesDeeplinks.contentId',
@@ -265,7 +265,7 @@ CREATE TABLE SeriesPrices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Audit Log for tracking all significant changes
-CREATE TABLE AuditLog (
+CREATE OR REPLACE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     contentRefId UUID NULL COMMENT 'Reference to the content being audited',
     tableName VARCHAR(64) NOT NULL,
@@ -287,7 +287,7 @@ CREATE INDEX AuditLogcontentRefId_IDX USING BTREE ON AuditLog (contentRefId, tab
 DROP TABLE IF EXISTS Deeplinks;
 
 -- Graveyard table for tracking failed content and links
-CREATE TABLE Graveyard (
+CREATE OR REPLACE TABLE Graveyard (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     contentRefId UUID NULL COMMENT 'Reference to the original content ID if available',
     reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other') NOT NULL,
@@ -459,7 +459,7 @@ END //
 
 
 -- Movies triggers
-CREATE TRIGGER Movies_Insert_Audit
+CREATE OR REPLACE TRIGGER Movies_Insert_Audit
 BEFORE INSERT ON Movies
 FOR EACH ROW
 BEGIN
@@ -494,7 +494,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER Movies_Update_Audit
+CREATE OR REPLACE TRIGGER Movies_Update_Audit
 AFTER UPDATE ON Movies
 FOR EACH ROW
 BEGIN
@@ -549,7 +549,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER Movies_Delete_Audit
+CREATE OR REPLACE TRIGGER Movies_Delete_Audit
 BEFORE DELETE ON Movies
 FOR EACH ROW
 BEGIN
@@ -582,7 +582,7 @@ BEGIN
 END //
 
 -- Series triggers
-CREATE TRIGGER Series_Insert_Audit
+CREATE OR REPLACE TRIGGER Series_Insert_Audit
 AFTER INSERT ON Series
 FOR EACH ROW
 BEGIN
@@ -618,7 +618,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER Series_Update_Audit
+CREATE OR REPLACE TRIGGER Series_Update_Audit
 AFTER UPDATE ON Series
 FOR EACH ROW
 BEGIN
@@ -676,7 +676,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER Series_Delete_Audit
+CREATE OR REPLACE TRIGGER Series_Delete_Audit
 BEFORE DELETE ON Series
 FOR EACH ROW
 BEGIN
@@ -713,7 +713,7 @@ END //
 
 
 -- Seasons triggers
-CREATE TRIGGER Seasons_Insert_Audit
+CREATE OR REPLACE TRIGGER Seasons_Insert_Audit
 AFTER INSERT ON Seasons
 FOR EACH ROW
 BEGIN
@@ -742,7 +742,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER Seasons_Update_Audit
+CREATE OR REPLACE TRIGGER Seasons_Update_Audit
 AFTER UPDATE ON Seasons
 FOR EACH ROW
 BEGIN
@@ -787,7 +787,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER Seasons_Delete_Audit
+CREATE OR REPLACE TRIGGER Seasons_Delete_Audit
 BEFORE DELETE ON Seasons
 FOR EACH ROW
 BEGIN
@@ -809,7 +809,7 @@ BEGIN
 END //
 
 -- Episodes triggers
-CREATE TRIGGER Episodes_Insert_Audit
+CREATE OR REPLACE TRIGGER Episodes_Insert_Audit
 AFTER INSERT ON Episodes
 FOR EACH ROW
 BEGIN
@@ -857,7 +857,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER Episodes_Update_Audit
+CREATE OR REPLACE TRIGGER Episodes_Update_Audit
 AFTER UPDATE ON Episodes
 FOR EACH ROW
 BEGIN
@@ -907,7 +907,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER Episodes_Delete_Audit
+CREATE OR REPLACE TRIGGER Episodes_Delete_Audit
 BEFORE DELETE ON Episodes
 FOR EACH ROW
 BEGIN
@@ -930,8 +930,8 @@ BEGIN
     CALL EpisodesDeleteAudit(jsonData);
 END //
 
--- Create trigger to update Series.seasonContentIds when a new season is added
-CREATE TRIGGER Seasons_Series_Insert AFTER INSERT ON Seasons
+-- CREATE OR REPLACE Trigger to update Series.seasonContentIds when a new season is added
+CREATE OR REPLACE TRIGGER Seasons_Series_Insert AFTER INSERT ON Seasons
 FOR EACH ROW
 BEGIN
     UPDATE Series 
@@ -940,7 +940,7 @@ BEGIN
 END //
 
 -- MoviesDeeplinks triggers
-CREATE TRIGGER MoviesDeeplinks_Insert_Audit
+CREATE OR REPLACE TRIGGER MoviesDeeplinks_Insert_Audit
 BEFORE INSERT ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
@@ -1015,7 +1015,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER MoviesDeeplinks_Update_Audit
+CREATE OR REPLACE TRIGGER MoviesDeeplinks_Update_Audit
 AFTER UPDATE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
@@ -1083,7 +1083,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER MoviesDeeplinks_Delete_Audit
+CREATE OR REPLACE TRIGGER MoviesDeeplinks_Delete_Audit
 BEFORE DELETE ON MoviesDeeplinks
 FOR EACH ROW
 BEGIN
@@ -1117,7 +1117,7 @@ BEGIN
 END //
 
 -- SeriesDeeplinks triggers
-CREATE TRIGGER SeriesDeeplinks_Insert_Audit
+CREATE OR REPLACE TRIGGER SeriesDeeplinks_Insert_Audit
 BEFORE INSERT ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
@@ -1191,7 +1191,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER SeriesDeeplinks_Update_Audit
+CREATE OR REPLACE TRIGGER SeriesDeeplinks_Update_Audit
 AFTER UPDATE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
@@ -1258,7 +1258,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER SeriesDeeplinks_Delete_Audit
+CREATE OR REPLACE TRIGGER SeriesDeeplinks_Delete_Audit
 BEFORE DELETE ON SeriesDeeplinks
 FOR EACH ROW
 BEGIN
@@ -1292,7 +1292,7 @@ BEGIN
 END //
 
 -- MoviesPrices triggers with correct number of arguments
-CREATE TRIGGER MoviesPrices_Insert_Audit
+CREATE OR REPLACE TRIGGER MoviesPrices_Insert_Audit
 BEFORE INSERT ON MoviesPrices
 FOR EACH ROW
 BEGIN
@@ -1322,7 +1322,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER MoviesPrices_Update_Audit
+CREATE OR REPLACE TRIGGER MoviesPrices_Update_Audit
 AFTER UPDATE ON MoviesPrices
 FOR EACH ROW
 BEGIN
@@ -1369,7 +1369,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER MoviesPrices_Delete_Audit
+CREATE OR REPLACE TRIGGER MoviesPrices_Delete_Audit
 BEFORE DELETE ON MoviesPrices
 FOR EACH ROW
 BEGIN
@@ -1392,7 +1392,7 @@ BEGIN
 END //
 
 -- SeriesPrices triggers
-CREATE TRIGGER SeriesPrices_Insert_Audit
+CREATE OR REPLACE TRIGGER SeriesPrices_Insert_Audit
 BEFORE INSERT ON SeriesPrices
 FOR EACH ROW
 BEGIN
@@ -1434,7 +1434,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER SeriesPrices_Update_Audit
+CREATE OR REPLACE TRIGGER SeriesPrices_Update_Audit
 AFTER UPDATE ON SeriesPrices
 FOR EACH ROW
 BEGIN
@@ -1504,7 +1504,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER SeriesPrices_Delete_Audit
+CREATE OR REPLACE TRIGGER SeriesPrices_Delete_Audit
 BEFORE DELETE ON SeriesPrices
 FOR EACH ROW
 BEGIN
@@ -1544,7 +1544,7 @@ DROP PROCEDURE IF EXISTS DropAllProcedures; //
 
 -- Audit helper procedures and functions
 -- Central audit logging procedure
-CREATE PROCEDURE LogAudit(
+CREATE OR REPLACE PROCEDURE LogAudit(
     IN tableName VARCHAR(64),
     IN contentRefId UUID,
     IN actionType ENUM('insert', 'update', 'delete', 'restore'),
@@ -1575,7 +1575,7 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE CreateGraveyardItem(
+CREATE OR REPLACE PROCEDURE CreateGraveyardItem(
     dataContentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices'),
     dataSourceType TEXT,
     dataReason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other'),
@@ -1625,7 +1625,7 @@ BEGIN
 END //
 
 -- Movies delete audit procedure
-CREATE PROCEDURE MoviesDeleteAudit(
+CREATE OR REPLACE PROCEDURE MoviesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
@@ -1652,12 +1652,12 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE SeriesDeleteAudit(
+CREATE OR REPLACE PROCEDURE SeriesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
     -- Delete all related
-    UPDATE Seasons SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
+    -- UPDATE Seasons SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
     DELETE FROM Seasons WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     CALL CreateGraveyardItem(
@@ -1680,40 +1680,40 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE SeasonsDeleteAudit(
+CREATE OR REPLACE PROCEDURE SeasonsDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
-    UPDATE Episodes SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
-    SET @seasonIsActive = JSON_VALUE(jsonData, '$.isActive');
+    -- UPDATE Episodes SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
+    -- SET @seasonIsActive = JSON_VALUE(jsonData, '$.isActive');
 
-    if(@seasonIsActive = 0) THEN
-        DELETE FROM Seasons WHERE contentId = JSON_VALUE(jsonData, '$.contentId');
-    END IF;
+    -- if(@seasonIsActive = 0) THEN
+    --     DELETE FROM Seasons WHERE contentId = JSON_VALUE(jsonData, '$.contentId');
+    -- END IF;
     -- Store episode count before deletion
-    SET @season_episode_count = (
-        SELECT COUNT(*) 
-        FROM Episodes 
-        WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId')
-    );
-    SET @series_id = JSON_VALUE(jsonData, '$.contentRefId');
-    UPDATE Seasons SET isActive = false WHERE contentId = @series_id;
-    SET @seriesIsActive = (
-        SELECT isActive 
-        FROM Series 
-        WHERE contentId = @series_id
-    );
+    -- SET @season_episode_count = (
+    --     SELECT COUNT(*) 
+    --     FROM Episodes 
+    --     WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId')
+    -- );
+    -- SET @series_id = JSON_VALUE(jsonData, '$.contentRefId');
+    -- UPDATE Seasons SET isActive = false WHERE contentId = @series_id;
+    -- SET @seriesIsActive = (
+    --     SELECT isActive 
+    --     FROM Series 
+    --     WHERE contentId = @series_id
+    -- );
 
     -- Delete all episodes
     DELETE FROM Episodes WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     -- Update series total episodes if we have a series ID
-    IF @seriesIsActive = 1 AND @season_episode_count > 0 THEN
-        UPDATE Series 
-        SET totalEpisodes = GREATEST(0, totalEpisodes - @season_episode_count),
-            totalSeasons = totalSeasons - 1
-        WHERE contentId = @series_id;
-    END IF;
+    -- IF @seriesIsActive = 1 AND @season_episode_count > 0 THEN
+    --     UPDATE Series 
+    --     SET totalEpisodes = GREATEST(0, totalEpisodes - @season_episode_count),
+    --         totalSeasons = totalSeasons - 1
+    --     WHERE contentId = @series_id;
+    -- END IF;
 
     CALL CreateGraveyardItem(
         'Seasons',
@@ -1735,7 +1735,7 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE EpisodesDeleteAudit(
+CREATE OR REPLACE PROCEDURE EpisodesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
@@ -1790,7 +1790,7 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE MoviesDeeplinksDeleteAudit(
+CREATE OR REPLACE PROCEDURE MoviesDeeplinksDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
@@ -1817,7 +1817,7 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE SeriesDeeplinksDeleteAudit(
+CREATE OR REPLACE PROCEDURE SeriesDeeplinksDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
@@ -1844,7 +1844,7 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE MoviesPricesDeleteAudit(
+CREATE OR REPLACE PROCEDURE MoviesPricesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
@@ -1868,7 +1868,7 @@ BEGIN
     );
 END //
 
-CREATE PROCEDURE SeriesPricesDeleteAudit(
+CREATE OR REPLACE PROCEDURE SeriesPricesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN

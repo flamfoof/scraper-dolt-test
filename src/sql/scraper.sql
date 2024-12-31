@@ -66,7 +66,7 @@ CREATE INDEX ScraperLogRun_IDX USING BTREE ON ScraperLog (runId);
 DELIMITER //
 
 -- Function to get JSON representation of a Scraper record
-CREATE FUNCTION GetScraperJSON(
+CREATE OR REPLACE FUNCTION GetScraperJSON(
     p_scraperId UUID,
     p_adminRefId SMALLINT UNSIGNED,
     p_sourceSlug VARCHAR(64),
@@ -112,7 +112,7 @@ BEGIN
 END //
 
 -- Function to get only changed fields between two JSON objects
-CREATE FUNCTION GetChangedFieldsJSON(old_json JSON, new_json JSON)
+CREATE OR REPLACE FUNCTION GetChangedFieldsJSON(old_json JSON, new_json JSON)
 RETURNS JSON
 DETERMINISTIC
 BEGIN
@@ -154,7 +154,7 @@ BEGIN
 END //
 
 -- Scrapers table triggers
-CREATE TRIGGER Scrapers_Insert_Audit
+CREATE OR REPLACE TRIGGER Scrapers_Insert_Audit
 AFTER INSERT ON Scrapers
 FOR EACH ROW
 BEGIN
@@ -192,7 +192,7 @@ BEGIN
     );
 END //
 
-CREATE TRIGGER Scrapers_Update_Audit
+CREATE OR REPLACE TRIGGER Scrapers_Update_Audit
 AFTER UPDATE ON Scrapers
 FOR EACH ROW
 BEGIN
@@ -250,7 +250,7 @@ BEGIN
     END IF;
 END //
 
-CREATE TRIGGER Scrapers_Delete_Audit
+CREATE OR REPLACE TRIGGER Scrapers_Delete_Audit
 AFTER DELETE ON Scrapers
 FOR EACH ROW
 BEGIN

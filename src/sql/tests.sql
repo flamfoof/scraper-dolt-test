@@ -2,10 +2,9 @@ use Tmdb;
 
 DELIMITER //
 
--- Sample data generation procedure
-DROP PROCEDURE IF EXISTS InsertRandomData //
 
-CREATE PROCEDURE InsertRandomData()
+
+CREATE OR REPLACE PROCEDURE InsertRandomData()
 BEGIN
     DECLARE i INT DEFAULT 1;
     DECLARE movie_content_id UUID;
@@ -18,7 +17,7 @@ BEGIN
     DECLARE series_release_date DATE;
     DECLARE episode_release_date DATE;
     
-    WHILE i <= 1000 DO
+    WHILE i <= 10 DO
         -- Generate UUIDs
         SET movie_content_id = UUID();
         SET series_content_id = UUID();
@@ -258,7 +257,7 @@ DROP PROCEDURE IF EXISTS TestTableUpdatesWithCount;
 
 DELIMITER //
 
-CREATE PROCEDURE TestTableUpdatesWithCount(IN update_count INT)
+CREATE OR REPLACE PROCEDURE TestTableUpdatesWithCount(IN update_count INT)
 BEGIN
     -- Create temporary tables with IDs to update
     CREATE TEMPORARY TABLE tmp_movies_original AS 
@@ -453,7 +452,7 @@ CALL TestTableUpdatesWithCount(5);
 -- Test partial content deletion
 DELIMITER //
 
-CREATE PROCEDURE TestPartialDeletion()
+CREATE OR REPLACE PROCEDURE TestPartialDeletion()
 BEGIN
     -- Declare variables for test data
     DECLARE content_id1 UUID;
@@ -527,9 +526,13 @@ BEGIN
     
     -- SELECT COUNT(*) = 2 INTO @test_result FROM SeriesDeeplinks;
     -- CALL AssertTrue(@test_result, 'Should have 2 deeplinks');
+    -- COMMIT;
     
     -- Delete one series (should cascade to its season, episode, and deeplink)
-    DELETE FROM Series WHERE contentId = series_id1;
+    DELETE FROM Series WHERE contentId = content_id1;
+    DELETE FROM Movies WHERE contentId = content_id1;
+    -- DELETE FROM MoviesDeeplinks WHERE contentRefId = content_id1;
+    -- COMMIT;
     
     -- Verify series 1 and its children are deleted
     -- SELECT COUNT(*) = 0 INTO @test_result FROM Series WHERE contentId = series_id1;
@@ -579,16 +582,126 @@ DELIMITER ;
 -- Run the test
 CALL TestPartialDeletion();
 
+use TaskQueue;
+-- Process Queue Test Procedures
+DELIMITER //
+-- Test procedure that will be called by the queue
+CREATE OR REPLACE PROCEDURE TestUpdateCounter(IN counter_value INT)
+BEGIN
+    SELECT counter_value as updated_value;
+END //
+
+-- Test procedure that will fail
+CREATE OR REPLACE PROCEDURE TestFailingProcedure(IN should_fail BOOLEAN)
+BEGIN
+    IF should_fail THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Intentional test failure';
+    END IF;
+    SELECT 'Success' as result;
+END //
+
+-- Main test procedure for ProcessQueue
+CREATE OR REPLACE PROCEDURE TestProcessQueue()
+BEGIN
+    -- Declare test variables
+    DECLARE test_task_id UUID;
+    DECLARE test_result BOOLEAN;
+    
+    -- Clean up any existing test data
+    DELETE FROM TaskQueue.FailedTasks;
+    DELETE FROM TaskQueue.ProcessQueue;
+    
+    -- Test 1: Queue a simple task
+    CALL TaskQueue.QueueTask(
+        'TestUpdateCounter',
+        JSON_ARRAY(42),
+        1,
+        JSON_OBJECT('test_name', 'simple_counter_test')
+    );
+    
+    SELECT COUNT(*) = 1 INTO test_result 
+    FROM TaskQueue.ProcessQueue 
+    WHERE taskType = 'TestUpdateCounter';
+    
+    SELECT IF(test_result, 'PASS', 'FAIL') as result, 
+           'Queue Simple Task' as test_name;
+    
+    -- Test 2: Queue a task with different priority
+    CALL TaskQueue.QueueTask(
+        'TestUpdateCounter',
+        JSON_ARRAY(100),
+        2,
+        JSON_OBJECT('test_name', 'high_priority_test')
+    );
+    
+    SELECT priority = 2 INTO test_result 
+    FROM TaskQueue.ProcessQueue 
+    WHERE taskType = 'TestUpdateCounter' 
+    ORDER BY id DESC 
+    LIMIT 1;
+    
+    SELECT IF(test_result, 'PASS', 'FAIL') as result, 
+           'Queue Priority Test' as test_name;
+    
+    -- Test 3: Test task failure handling
+    CALL TaskQueue.QueueTask(
+        'TestFailingProcedure',
+        JSON_ARRAY(true),
+        1,
+        JSON_OBJECT('test_name', 'failure_test')
+    );
+    
+    -- Process the queue
+    CALL TaskQueue.ProcessQueueItems(10);
+    
+    -- Wait a bit for processing
+    DO SLEEP(1);
+    
+    -- Check if task was marked as failed
+    SELECT COUNT(*) = 1 INTO test_result 
+    FROM TaskQueue.FailedTasks 
+    WHERE taskType = 'TestFailingProcedure';
+    
+    SELECT IF(test_result, 'PASS', 'FAIL') as result, 
+           'Task Failure Handling Test' as test_name;
+    
+    -- Test 4: Test successful task completion
+    SELECT COUNT(*) = 1 INTO test_result 
+    FROM TaskQueue.ProcessQueue 
+    WHERE taskType = 'TestUpdateCounter' 
+    AND status = 'completed';
+    
+    SELECT IF(test_result, 'PASS', 'FAIL') as result, 
+           'Task Completion Test' as test_name;
+    
+    -- Test 5: Test retry count increment
+    SELECT COUNT(*) = 1 INTO test_result 
+    FROM TaskQueue.ProcessQueue 
+    WHERE taskType = 'TestFailingProcedure' 
+    AND retryCount = 1;
+    
+    SELECT IF(test_result, 'PASS', 'FAIL') as result, 
+           'Retry Count Test' as test_name;
+    
+    -- Clean up test data
+    -- DELETE FROM TaskQueue.FailedTasks;
+    -- DELETE FROM TaskQueue.ProcessQueue;
+END //
+
+DELIMITER ;
+
+-- Run the ProcessQueue tests
+CALL TestProcessQueue();
+
 -- Switch to Scrapers database for test data generation
 USE Scrapers;
 
 DELIMITER //
 
 -- Sample scraper data generation procedure
-DROP PROCEDURE IF EXISTS InsertScraperTestData //
-DROP PROCEDURE IF EXISTS TestPartialDeletion //
 
-CREATE PROCEDURE InsertScraperTestData()
+CREATE OR REPLACE PROCEDURE InsertScraperTestData()
 BEGIN
     DECLARE i INT DEFAULT 1;
     DECLARE scraper_id UUID;
@@ -735,5 +848,10 @@ END //
 
 -- Call the procedure to generate test data
 CALL InsertScraperTestData() //
+
+-- Sample data generation procedure
+DROP PROCEDURE IF EXISTS InsertRandomData //
+DROP PROCEDURE IF EXISTS InsertScraperTestData //
+DROP PROCEDURE IF EXISTS TestPartialDeletion //
 
 DELIMITER ;

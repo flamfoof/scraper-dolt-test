@@ -3,7 +3,7 @@ CREATE DATABASE IF NOT EXISTS `Tmdb`;
 USE Tmdb;
 DELIMITER //
 DROP PROCEDURE IF EXISTS DropAllProcedures //
-CREATE PROCEDURE DropAllProcedures()
+CREATE OR REPLACE PROCEDURE DropAllProcedures()
 BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE procName VARCHAR(255);
@@ -34,7 +34,7 @@ END //
 
 CALL DropAllProcedures(); //
 
-CREATE PROCEDURE DropAllTables()
+CREATE OR REPLACE PROCEDURE DropAllTables()
 BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE tableName VARCHAR(255);
@@ -64,7 +64,7 @@ BEGIN
     CLOSE cur;
 END //
 
-CREATE PROCEDURE DropAllFunctions()
+CREATE OR REPLACE PROCEDURE DropAllFunctions()
 BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE funcName VARCHAR(255);
@@ -95,7 +95,7 @@ END //
 
 
 -- delete all triggers
-CREATE PROCEDURE DropAllTriggers()
+CREATE OR REPLACE PROCEDURE DropAllTriggers()
 BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE triggerName VARCHAR(255);
@@ -114,6 +114,33 @@ BEGIN
         
         SET @drop_trigger_sql = CONCAT('DROP TRIGGER IF EXISTS ', triggerName);
         PREPARE stmt FROM @drop_trigger_sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END LOOP;
+
+    CLOSE cur;
+END //
+
+--delete all events
+CREATE OR REPLACE PROCEDURE DropAllEvents()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE eventName VARCHAR(255);
+    DECLARE cur CURSOR FOR 
+        SELECT EVENT_NAME 
+        FROM information_schema.EVENTS 
+        WHERE EVENT_SCHEMA = DATABASE();
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+    read_loop: LOOP
+        FETCH NEXT FROM cur INTO eventName;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        SET @drop_event_sql = CONCAT('DROP EVENT IF EXISTS ', eventName);
+        PREPARE stmt FROM @drop_event_sql;
         EXECUTE stmt;
         DEALLOCATE PREPARE stmt;
     END LOOP;
