@@ -5,51 +5,62 @@ USE TaskQueue;
 DELIMITER ;
 
 -- Process Queue Configuration
-CREATE OR REPLACE  TABLE ProcessQueue (
+CREATE OR REPLACE TABLE ProcessQueue (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     database VARCHAR(64) NOT NULL,
     taskType VARCHAR(64) NOT NULL COMMENT 'Name of stored procedure to execute',
-    status ENUM('pending', 'processing', 'completed', 'failed', 'cancelled') DEFAULT 'pending' NOT NULL,
+    status ENUM('pending', 'processing') DEFAULT 'pending' NOT NULL,
     parameters JSON NULL COMMENT 'Parameters to pass to the procedure',
     priority TINYINT UNSIGNED DEFAULT 1 NOT NULL,
-    retryCount TINYINT UNSIGNED DEFAULT 0 NOT NULL,
-    maxRetries TINYINT UNSIGNED DEFAULT 3 NOT NULL,
-    lastError TEXT NULL,
     metadata JSON NULL COMMENT 'Additional task metadata',
-    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-    startedAt TIMESTAMP NULL,
-    completedAt TIMESTAMP NULL,
     CONSTRAINT PRIMARY KEY (id),
     INDEX ProcessQueueStatus_IDX (id, status, priority),
     INDEX ProcessQueueType_IDX (taskType)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Failed Tasks Log
-CREATE OR REPLACE  TABLE FailedTasks (
+-- Completed Tasks Queue
+CREATE OR REPLACE TABLE CompletedQueue (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    taskRefId UUID NOT NULL COMMENT 'Reference to ProcessQueue.id',
+    taskRefId UUID NOT NULL COMMENT 'Reference to original ProcessQueue.id',
     database VARCHAR(64) NOT NULL,
     taskType VARCHAR(64) NOT NULL,
     parameters JSON NULL,
-    error TEXT NOT NULL,
     metadata JSON NULL,
-    failedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    completedAt TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
-    INDEX FailedTasksType_IDX (taskType),
-    INDEX FailedTasksTime_IDX (failedAt)
+    INDEX CompletedQueueRef_IDX (taskRefId),
+    INDEX CompletedQueueType_IDX (taskType),
+    INDEX CompletedQueueTime_IDX (completedAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Failed Tasks Queue
+CREATE OR REPLACE TABLE FailedQueue (
+    id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
+    taskRefId UUID NOT NULL COMMENT 'Reference to original ProcessQueue.id',
+    database VARCHAR(64) NOT NULL,
+    taskType VARCHAR(64) NOT NULL,
+    parameters JSON NULL,
+    metadata JSON NULL,
+    lastError TEXT NOT NULL,
+    failedAt TIMESTAMP NOT NULL,
+    CONSTRAINT PRIMARY KEY (id),
+    INDEX FailedQueueRef_IDX (taskRefId),
+    INDEX FailedQueueType_IDX (taskType),
+    INDEX FailedQueueTime_IDX (failedAt)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DELIMITER //
 
 -- Function to get JSON representation of a Task
-CREATE OR REPLACE  FUNCTION GetTaskJSON(
+CREATE OR REPLACE FUNCTION GetTaskJSON(
     p_id UUID,
     p_taskType VARCHAR(100),
     p_parameters JSON,
     p_priority TINYINT UNSIGNED,
     p_status VARCHAR(20),
     p_metadata JSON
-) RETURNS JSON
+)
+RETURNS JSON
 DETERMINISTIC
 BEGIN
     DECLARE result JSON;
@@ -76,7 +87,7 @@ BEGIN
 END //
 
 -- Helper procedure to add a task to the queue
-CREATE OR REPLACE  PROCEDURE QueueTask(
+CREATE OR REPLACE PROCEDURE QueueTask(
     IN p_database VARCHAR(100),
     IN p_taskType VARCHAR(100),
     IN p_parameters JSON,
@@ -103,7 +114,7 @@ BEGIN
 END //
 
 -- Procedure to process queue items
-CREATE OR REPLACE  PROCEDURE ProcessQueueItems(IN batchSize INT UNSIGNED)
+CREATE OR REPLACE PROCEDURE ProcessQueueItems(IN batchSize INT UNSIGNED)
 BEGIN
     DECLARE done BOOLEAN DEFAULT FALSE;
     DECLARE task_id BINARY(16);
@@ -117,7 +128,6 @@ BEGIN
         SELECT id, database, taskType, parameters, metadata
         FROM TaskQueue.ProcessQueue
         WHERE status = 'pending'
-        AND retryCount < maxRetries
         ORDER BY priority DESC, id ASC
         LIMIT batchSize;
     
@@ -126,42 +136,8 @@ BEGIN
     BEGIN
         SET error_occurred = TRUE;
         GET DIAGNOSTICS CONDITION 1 @sqlstate = RETURNED_SQLSTATE, @errno = MYSQL_ERRNO, @text = MESSAGE_TEXT;
-        
-        -- Log the failed task
-        INSERT INTO TaskQueue.FailedTasks (
-            id,
-            taskRefId,
-            database,
-            taskType,
-            parameters,
-            error,
-            metadata
-        )
-        VALUES (
-            UUID_v7(),
-            task_id,
-            task_database,
-            task_type,
-            task_params,
-            CONCAT('Error: ', @errno, ' State: ', @sqlstate, ' Message: ', @text),
-            task_metadata
-        );
-        
-        -- Update task status
-        UPDATE TaskQueue.ProcessQueue 
-        SET status = 'failed',
-            lastError = CONCAT('Error: ', @errno, ' State: ', @sqlstate, ' Message: ', @text),
-            retryCount = retryCount + 1,
-            completedAt = CURRENT_TIMESTAMP
-        WHERE id = task_id;
-        
-        -- Commit the failure record and status update
-        COMMIT;
-        -- Start a new transaction for the next item
-        START TRANSACTION;
     END;
     
-    START TRANSACTION;
     OPEN cur;
     
     read_loop: LOOP
@@ -174,15 +150,6 @@ BEGIN
         IF done THEN
             LEAVE read_loop;
         END IF;
-        
-        -- Mark as processing
-        UPDATE TaskQueue.ProcessQueue 
-        SET status = 'processing',
-            startedAt = CURRENT_TIMESTAMP 
-        WHERE id = task_id;
-        
-        -- Commit the status update
-        COMMIT;
         
         -- Execute the stored procedure dynamically
         SET @sql = CONCAT('CALL ', task_database, '.', task_type, '(', 
@@ -206,85 +173,84 @@ BEGIN
             ),
         ')');
         
-        START TRANSACTION;
-        
         -- Prepare and execute with error handling
         BEGIN
             DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
             BEGIN
                 SET error_occurred = TRUE;
                 GET DIAGNOSTICS CONDITION 1 @sqlstate = RETURNED_SQLSTATE, @errno = MYSQL_ERRNO, @text = MESSAGE_TEXT;
-                
-                -- Log the failed task
-                INSERT INTO TaskQueue.FailedTasks (
+            END;
+            
+            START TRANSACTION;
+            PREPARE stmt FROM @sql;
+            EXECUTE stmt;
+            DEALLOCATE PREPARE stmt;
+            
+            IF NOT error_occurred THEN
+                -- Move to CompletedQueue
+                INSERT INTO TaskQueue.CompletedQueue (
                     id,
                     taskRefId,
                     database,
                     taskType,
                     parameters,
-                    error,
-                    metadata
+                    metadata,
+                    completedAt
                 )
-                VALUES (
+                SELECT 
                     UUID_v7(),
-                    task_id,
-                    task_database,
-                    task_type,
-                    task_params,
-                    CONCAT('Error: ', @errno, ' State: ', @sqlstate, ' Message: ', @text),
-                    task_metadata
-                );
+                    id,
+                    database,
+                    taskType,
+                    parameters,
+                    metadata,
+                    CURRENT_TIMESTAMP
+                FROM TaskQueue.ProcessQueue
+                WHERE id = task_id;
                 
-                -- Commit the failure record
-                COMMIT;
-            END;
-            
-            PREPARE stmt FROM @sql;
-            EXECUTE stmt;
-            DEALLOCATE PREPARE stmt;
-            
-            -- If no error occurred, mark as completed
-            IF NOT error_occurred THEN
-                UPDATE TaskQueue.ProcessQueue 
-                SET status = 'completed',
-                    completedAt = CURRENT_TIMESTAMP
-                WHERE id = task_id;
-                COMMIT;
+                -- Remove from ProcessQueue
+                DELETE FROM TaskQueue.ProcessQueue WHERE id = task_id;
             ELSE 
-                -- Update task status
-                UPDATE TaskQueue.ProcessQueue 
-                SET status = 'failed',
-                    lastError = CONCAT('Error: ', @errno, ' State: ', @sqlstate, ' Message: ', @text),
-                    retryCount = retryCount + 1,
-                    completedAt = CURRENT_TIMESTAMP
+                -- Move to FailedQueue
+                INSERT INTO TaskQueue.FailedQueue (
+                    id,
+                    taskRefId,
+                    database,
+                    taskType,
+                    parameters,
+                    metadata,
+                    lastError,
+                    failedAt
+                )
+                SELECT 
+                    UUID_v7(),
+                    id,
+                    database,
+                    taskType,
+                    parameters,
+                    metadata,
+                    CONCAT('Error: ', @errno, ' State: ', @sqlstate, ' Message: ', @text),
+                    CURRENT_TIMESTAMP
+                FROM TaskQueue.ProcessQueue
                 WHERE id = task_id;
+                
+                -- Remove from ProcessQueue
+                DELETE FROM TaskQueue.ProcessQueue WHERE id = task_id;
             END IF;
+            COMMIT;
         END;
-        
-        START TRANSACTION;
     END LOOP;
     
     CLOSE cur;
-    COMMIT;
     
     -- Clean up
     SET @sql = NULL;
 END //
 
--- CREATE OR REPLACE  event to process queue periodically
-CREATE EVENT IF NOT EXISTS ProcessQueueEvent
+-- CREATE OR REPLACE event to process queue periodically
+CREATE OR REPLACE EVENT ProcessQueueEvent
 ON SCHEDULE EVERY 5 SECOND
 DO
-    CALL ProcessQueueItems(50) //
+    CALL ProcessQueueItems(500) //
 
 DELIMITER ;
--- Queue(
---     'update_user',
---     '{"name": "John Doe", "email": "john@example.com"}',
---     'users',
---     NOW(),
---     1
--- );
-
--- Process events manually (if needed)
--- CALL ProcessEvents();

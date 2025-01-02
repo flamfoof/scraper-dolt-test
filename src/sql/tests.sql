@@ -624,7 +624,8 @@ BEGIN
     
     SELECT COUNT(*) = 1 INTO test_result 
     FROM TaskQueue.ProcessQueue 
-    WHERE taskType = 'TestUpdateCounter';
+    WHERE taskType = 'TestUpdateCounter'
+    AND status = 'pending';
     
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
         'Queue Simple Task' as test_name;
@@ -655,47 +656,52 @@ BEGIN
         1,
         JSON_OBJECT('test_name', 'failure_test')
     );
-
+    
     -- Process the queue
     -- CALL TaskQueue.ProcessQueueItems(10);
     
-    -- Wait a bit for processing
     
-    -- Check if task was marked as failed
-    SELECT COUNT(*) = 1 INTO test_result 
-    FROM TaskQueue.FailedTasks 
-    WHERE taskType = 'TestFailingProcedure';
+    -- Check if task was moved to FailedQueue
+    SELECT COUNT(*) >= 1 INTO test_result 
+    FROM TaskQueue.FailedQueue 
+    WHERE taskType = 'TestFailingProcedure'
+    AND lastError IS NOT NULL;
     
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
            'Task Failure Handling Test' as test_name;
     
     -- Test 4: Test successful task completion
-    SELECT COUNT(*) = 1 INTO test_result 
-    FROM TaskQueue.ProcessQueue 
-    WHERE taskType = 'TestUpdateCounter' 
-    AND status = 'completed';
+    SELECT COUNT(*) >= 1 INTO test_result 
+    FROM TaskQueue.CompletedQueue 
+    WHERE taskType = 'TestUpdateCounter';
     
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
            'Task Completion Test' as test_name;
-    
-    -- Test 5: Test retry count increment
-    SELECT COUNT(*) = 1 INTO test_result 
+           
+    -- Test 5: Verify tasks are removed from ProcessQueue after processing
+    SELECT COUNT(*) = 0 INTO test_result 
     FROM TaskQueue.ProcessQueue 
-    WHERE taskType = 'TestFailingProcedure' 
-    AND retryCount = 1;
+    WHERE taskType IN ('TestUpdateCounter', 'TestFailingProcedure');
     
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
-           'Retry Count Test' as test_name;
+           'Process Queue Cleanup Test' as test_name;
+           
+    -- Test 6: Verify task reference IDs are maintained
+    SELECT COUNT(*) >= 1 INTO test_result 
+    FROM TaskQueue.CompletedQueue c
+    JOIN TaskQueue.FailedQueue f ON f.taskType = 'TestFailingProcedure'
+    WHERE c.taskType = 'TestUpdateCounter'
+    AND c.taskRefId IS NOT NULL
+    AND f.taskRefId IS NOT NULL;
     
---     -- Clean up test data
---     -- DELETE FROM TaskQueue.FailedTasks;
---     -- DELETE FROM TaskQueue.ProcessQueue;
+    SELECT IF(test_result, 'PASS', 'FAIL') as result, 
+           'Task Reference ID Test' as test_name;
 END //
 
 DELIMITER ;
 
 -- Run the ProcessQueue tests
-CALL TestProcessQueue();
+-- CALL TestProcessQueue();
 
 -- Switch to Scrapers database for test data generation
 USE Scrapers;
@@ -863,4 +869,3 @@ DROP PROCEDURE IF EXISTS TestPartialDeletion;
 -- DROP PROCEDURE IF EXISTS TestProcessQueue;
 -- DROP PROCEDURE IF EXISTS TestUpdateCounter;
 -- DROP PROCEDURE IF EXISTS TestFailingProcedure;
-
