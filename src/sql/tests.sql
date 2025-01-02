@@ -253,8 +253,6 @@ DELIMITER ;
 
 CALL InsertRandomData();
 
-DROP PROCEDURE IF EXISTS TestTableUpdatesWithCount;
-
 DELIMITER //
 
 CREATE OR REPLACE PROCEDURE TestTableUpdatesWithCount(IN update_count INT)
@@ -607,13 +605,17 @@ BEGIN
     -- Declare test variables
     DECLARE test_task_id UUID;
     DECLARE test_result BOOLEAN;
+    DECLARE currentDatabase VARCHAR(64);
     
-    -- Clean up any existing test data
-    DELETE FROM TaskQueue.FailedTasks;
-    DELETE FROM TaskQueue.ProcessQueue;
+    SELECT DATABASE() INTO @dbRef;
+    SET currentDatabase = @dbRef;
+--     -- Clean up any existing test data
+--     -- DELETE FROM TaskQueue.FailedTasks;
+-- --     DELETE FROM TaskQueue.ProcessQueue;
     
     -- Test 1: Queue a simple task
     CALL TaskQueue.QueueTask(
+        currentDatabase,
         'TestUpdateCounter',
         JSON_ARRAY(42),
         1,
@@ -625,16 +627,17 @@ BEGIN
     WHERE taskType = 'TestUpdateCounter';
     
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
-           'Queue Simple Task' as test_name;
+        'Queue Simple Task' as test_name;
     
     -- Test 2: Queue a task with different priority
     CALL TaskQueue.QueueTask(
+        currentDatabase,
         'TestUpdateCounter',
         JSON_ARRAY(100),
         2,
         JSON_OBJECT('test_name', 'high_priority_test')
     );
-    
+
     SELECT priority = 2 INTO test_result 
     FROM TaskQueue.ProcessQueue 
     WHERE taskType = 'TestUpdateCounter' 
@@ -646,17 +649,17 @@ BEGIN
     
     -- Test 3: Test task failure handling
     CALL TaskQueue.QueueTask(
+        currentDatabase,
         'TestFailingProcedure',
         JSON_ARRAY(true),
         1,
         JSON_OBJECT('test_name', 'failure_test')
     );
-    
+
     -- Process the queue
-    CALL TaskQueue.ProcessQueueItems(10);
+    -- CALL TaskQueue.ProcessQueueItems(10);
     
     -- Wait a bit for processing
-    DO SLEEP(1);
     
     -- Check if task was marked as failed
     SELECT COUNT(*) = 1 INTO test_result 
@@ -684,9 +687,9 @@ BEGIN
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
            'Retry Count Test' as test_name;
     
-    -- Clean up test data
-    -- DELETE FROM TaskQueue.FailedTasks;
-    -- DELETE FROM TaskQueue.ProcessQueue;
+--     -- Clean up test data
+--     -- DELETE FROM TaskQueue.FailedTasks;
+--     -- DELETE FROM TaskQueue.ProcessQueue;
 END //
 
 DELIMITER ;
@@ -846,12 +849,18 @@ BEGIN
     END WHILE;
 END //
 
+DELIMITER ;
+
+
 -- Call the procedure to generate test data
-CALL InsertScraperTestData() //
+CALL InsertScraperTestData();
 
 -- Sample data generation procedure
-DROP PROCEDURE IF EXISTS InsertRandomData //
-DROP PROCEDURE IF EXISTS InsertScraperTestData //
-DROP PROCEDURE IF EXISTS TestPartialDeletion //
+DROP PROCEDURE IF EXISTS InsertRandomData;
+DROP PROCEDURE IF EXISTS InsertScraperTestData;
+DROP PROCEDURE IF EXISTS TestPartialDeletion;
+-- DROP PROCEDURE IF EXISTS TestTableUpdatesWithCount;
+-- DROP PROCEDURE IF EXISTS TestProcessQueue;
+-- DROP PROCEDURE IF EXISTS TestUpdateCounter;
+-- DROP PROCEDURE IF EXISTS TestFailingProcedure;
 
-DELIMITER ;

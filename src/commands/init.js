@@ -76,6 +76,8 @@ const initializeMariaDB = async (spinner, options) => {
 			max_connections: 100,
 			innodb_flush_log_at_trx_commit: 2,
 			lower_case_table_names: 2,
+			event_scheduler: 1,
+
 			//   'pid-file': `${currDir}/mysql/mysql.pid`,
 			// 'general_log_file': `${currDir}/mysql/logs/mysql.log`,
 			//   'general_log': '1',
