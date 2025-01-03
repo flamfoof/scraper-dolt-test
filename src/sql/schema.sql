@@ -300,7 +300,7 @@ DROP TABLE IF EXISTS Deeplinks;
 -- Graveyard table for tracking failed content and links
 CREATE OR REPLACE TABLE Graveyard (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    contentRefId UUID NOT NULL COMMENT 'Reference to the original content ID if available',
+    contentRefId UUID NULL COMMENT 'Reference to the original content ID if available',
     reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other') NOT NULL,
     contentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices') NOT NULL,
     sourceId VARCHAR(128) NULL COMMENT 'External ID from the source (e.g., TMDB ID, IMDB ID)',
@@ -314,7 +314,8 @@ CREATE OR REPLACE TABLE Graveyard (
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT GraveyardUnique_UK UNIQUE KEY (
         contentType,
-        contentRefId
+        sourceId,
+        sourceType
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
