@@ -69,7 +69,7 @@ const initializeMariaDB = async (spinner, options) => {
 			datadir: `${currDir}/mysql/data`,
 			socket: `${currDir}/mysql/mysql.sock`,
 			"log-error": `${currDir}/mysql/logs/error.log`,
-			slow_query_log_file: "$currDir/mysql/logs/slow_query.log",
+			slow_query_log_file: `${currDir}/mysql/logs/slow_query.log`,
 			slow_query_log: 1,
 			innodb_buffer_pool_size: "256M",
 			innodb_log_file_size: "50M",
@@ -80,7 +80,8 @@ const initializeMariaDB = async (spinner, options) => {
 
 			//   'pid-file': `${currDir}/mysql/mysql.pid`,
 			// 'general_log_file': `${currDir}/mysql/logs/mysql.log`,
-			//   'general_log': '1',
+			'general_log': null,
+			'general_log_file' : `${currDir}/mysql/logs/mysql.log`,
 			// 'max_connections': '100',
 			//   'table_open_cache': '2000',
 			//   'tmp_table_size': '35M',
@@ -108,7 +109,12 @@ const initializeMariaDB = async (spinner, options) => {
 			.map(
 				([section, values]) =>
 					`[${section}]\n${Object.entries(values)
-						.map(([key, value]) => `${key.padEnd(30)} = ${value}`)
+						.map(([key, value]) => {
+							if(value === null) {
+								return `${key}`
+							}
+							return `${key.padEnd(30)} = ${value}`
+						})
 						.join("\n")}`
 			)
 			.join("\n\n")
