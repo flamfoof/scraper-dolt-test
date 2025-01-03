@@ -584,15 +584,22 @@ use TaskQueue;
 -- Process Queue Test Procedures
 DELIMITER //
 -- Test procedure that will be called by the queue
-CREATE OR REPLACE PROCEDURE TestUpdateCounter(IN counter_value INT)
+CREATE OR REPLACE PROCEDURE TestUpdateCounter(IN jsonData JSON)
 BEGIN
-    SELECT counter_value as updated_value;
+    DECLARE counter INT;
+    SET counter = JSON_VALUE(jsonData, '$.value');
+    
+    -- Simple counter update to test successful execution
+    SET @test_counter = COALESCE(@test_counter, 0) + counter;
 END //
 
 -- Test procedure that will fail
-CREATE OR REPLACE PROCEDURE TestFailingProcedure(IN should_fail BOOLEAN)
+CREATE OR REPLACE PROCEDURE TestFailingProcedure(IN jsonData JSON)
 BEGIN
-    IF should_fail THEN
+    DECLARE shouldFail BOOLEAN;
+    SET shouldFail = JSON_VALUE(jsonData, '$.shouldFail');
+    
+    IF shouldFail THEN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Intentional test failure';
     END IF;
@@ -603,38 +610,35 @@ END //
 CREATE OR REPLACE PROCEDURE TestProcessQueue()
 BEGIN
     -- Declare test variables
-    DECLARE test_task_id UUID;
     DECLARE test_result BOOLEAN;
     DECLARE currentDatabase VARCHAR(64);
     
     SELECT DATABASE() INTO @dbRef;
     SET currentDatabase = @dbRef;
---     -- Clean up any existing test data
---     -- DELETE FROM TaskQueue.FailedTasks;
--- --     DELETE FROM TaskQueue.ProcessQueue;
-    
-    -- Test 1: Queue a simple task
+
+    -- Test 1: Queue a task with JSON parameters
     CALL TaskQueue.QueueTask(
         currentDatabase,
         'TestUpdateCounter',
-        JSON_ARRAY(42),
+        JSON_OBJECT('value', 42),
         1,
-        JSON_OBJECT('test_name', 'simple_counter_test')
+        JSON_OBJECT('test_name', 'json_param_test')
     );
     
     SELECT COUNT(*) = 1 INTO test_result 
     FROM TaskQueue.ProcessQueue 
     WHERE taskType = 'TestUpdateCounter'
-    AND status = 'pending';
+    AND status = 'pending'
+    AND JSON_VALID(parameters);
     
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
-        'Queue Simple Task' as test_name;
+        'Queue JSON Parameter Task' as test_name;
     
     -- Test 2: Queue a task with different priority
     CALL TaskQueue.QueueTask(
         currentDatabase,
         'TestUpdateCounter',
-        JSON_ARRAY(100),
+        JSON_OBJECT('value', 100),
         2,
         JSON_OBJECT('test_name', 'high_priority_test')
     );
@@ -648,18 +652,17 @@ BEGIN
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
            'Queue Priority Test' as test_name;
     
-    -- Test 3: Test task failure handling
+    -- Test 3: Test task failure handling with JSON
     CALL TaskQueue.QueueTask(
         currentDatabase,
         'TestFailingProcedure',
-        JSON_ARRAY(true),
+        JSON_OBJECT('shouldFail', true),
         1,
         JSON_OBJECT('test_name', 'failure_test')
     );
     
     -- Process the queue
-    -- CALL TaskQueue.ProcessQueueItems(10);
-    
+    CALL TaskQueue.ProcessQueueItems(10);
     
     -- Check if task was moved to FailedQueue
     SELECT COUNT(*) >= 1 INTO test_result 
@@ -686,16 +689,16 @@ BEGIN
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
            'Process Queue Cleanup Test' as test_name;
            
-    -- Test 6: Verify task reference IDs are maintained
+    -- Test 6: Verify task metadata preservation
     SELECT COUNT(*) >= 1 INTO test_result 
     FROM TaskQueue.CompletedQueue c
     JOIN TaskQueue.FailedQueue f ON f.taskType = 'TestFailingProcedure'
     WHERE c.taskType = 'TestUpdateCounter'
-    AND c.taskRefId IS NOT NULL
-    AND f.taskRefId IS NOT NULL;
+    AND c.metadata IS NOT NULL
+    AND f.metadata IS NOT NULL;
     
     SELECT IF(test_result, 'PASS', 'FAIL') as result, 
-           'Task Reference ID Test' as test_name;
+           'Task Metadata Test' as test_name;
 END //
 
 DELIMITER ;

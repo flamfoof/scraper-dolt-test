@@ -13,6 +13,7 @@ CREATE OR REPLACE TABLE ProcessQueue (
     parameters JSON NULL COMMENT 'Parameters to pass to the procedure',
     priority TINYINT UNSIGNED DEFAULT 1 NOT NULL,
     metadata JSON NULL COMMENT 'Additional task metadata',
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     INDEX ProcessQueueStatus_IDX (id, status, priority),
     INDEX ProcessQueueType_IDX (taskType)

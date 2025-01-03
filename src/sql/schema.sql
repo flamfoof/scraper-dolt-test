@@ -85,7 +85,7 @@ CREATE OR REPLACE TABLE Series (
 CREATE OR REPLACE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    contentRefId UUID NULL COMMENT 'Reference to Series.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to Series.contentId',
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NULL,
     description TEXT NULL,
@@ -109,7 +109,7 @@ CREATE OR REPLACE TABLE Seasons (
 CREATE OR REPLACE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
-    contentRefId UUID NULL COMMENT 'Reference to Seasons.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to Seasons.contentId',
     tmdbId VARCHAR(20) NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -138,7 +138,7 @@ CREATE OR REPLACE TABLE Episodes (
 CREATE OR REPLACE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
-    contentRefId UUID NULL COMMENT 'Reference to Movies.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
@@ -172,7 +172,7 @@ CREATE OR REPLACE TABLE MoviesDeeplinks (
 CREATE OR REPLACE TABLE SeriesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
-    contentRefId UUID NULL COMMENT 'Reference to Episodes.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
@@ -206,7 +206,7 @@ CREATE OR REPLACE TABLE SeriesDeeplinks (
 CREATE OR REPLACE TABLE MoviesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
-    contentRefId UUID NULL COMMENT 'Reference to MoviesDeeplinks.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to MoviesDeeplinks.contentId',
     region VARCHAR(10) NULL,
     -- Buy prices of movies
     buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of movies',
@@ -229,7 +229,7 @@ CREATE OR REPLACE TABLE MoviesPrices (
 CREATE OR REPLACE TABLE SeriesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
-    contentRefId UUID NULL COMMENT 'Reference to SeriesDeeplinks.contentId',
+    contentRefId UUID NOT NULL COMMENT 'Reference to SeriesDeeplinks.contentId',
     region VARCHAR(10) NULL,
     -- Buy prices of episodes
     buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of episodes',
@@ -267,7 +267,7 @@ CREATE OR REPLACE TABLE SeriesPrices (
 -- Audit Log for tracking all significant changes
 CREATE OR REPLACE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    contentRefId UUID NULL COMMENT 'Reference to the content being audited',
+    contentRefId UUID NOT NULL COMMENT 'Reference to the content being audited',
     tableName VARCHAR(64) NOT NULL,
     action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
     username VARCHAR(64) NULL COMMENT 'Username of who made the change',
@@ -300,7 +300,7 @@ DROP TABLE IF EXISTS Deeplinks;
 -- Graveyard table for tracking failed content and links
 CREATE OR REPLACE TABLE Graveyard (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
-    contentRefId UUID NULL COMMENT 'Reference to the original content ID if available',
+    contentRefId UUID NOT NULL COMMENT 'Reference to the original content ID if available',
     reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other') NOT NULL,
     contentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices') NOT NULL,
     sourceId VARCHAR(128) NULL COMMENT 'External ID from the source (e.g., TMDB ID, IMDB ID)',
