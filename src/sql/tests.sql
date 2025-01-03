@@ -530,7 +530,7 @@ BEGIN
     DELETE FROM Series WHERE contentId = content_id1;
     DELETE FROM Movies WHERE contentId = content_id1;
     -- DELETE FROM MoviesDeeplinks WHERE contentRefId = content_id1;
-    -- COMMIT;
+    COMMIT;
     
     -- Verify series 1 and its children are deleted
     -- SELECT COUNT(*) = 0 INTO @test_result FROM Series WHERE contentId = series_id1;
@@ -701,7 +701,7 @@ END //
 DELIMITER ;
 
 -- Run the ProcessQueue tests
--- CALL TestProcessQueue();
+CALL TestProcessQueue();
 
 -- Switch to Scrapers database for test data generation
 USE Scrapers;
@@ -709,7 +709,6 @@ USE Scrapers;
 DELIMITER //
 
 -- Sample scraper data generation procedure
-
 CREATE OR REPLACE PROCEDURE InsertScraperTestData()
 BEGIN
     DECLARE i INT DEFAULT 1;

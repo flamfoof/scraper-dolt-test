@@ -80,8 +80,8 @@ const initializeMariaDB = async (spinner, options) => {
 
 			//   'pid-file': `${currDir}/mysql/mysql.pid`,
 			// 'general_log_file': `${currDir}/mysql/logs/mysql.log`,
-			'general_log': null,
-			'general_log_file' : `${currDir}/mysql/logs/mysql.log`,
+			// 'general_log': null,
+			// 'general_log_file' : `${currDir}/mysql/logs/mysql.log`,
 			// 'max_connections': '100',
 			//   'table_open_cache': '2000',
 			//   'tmp_table_size': '35M',

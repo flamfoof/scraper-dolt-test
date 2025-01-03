@@ -152,26 +152,15 @@ BEGIN
         END IF;
         
         -- Execute the stored procedure dynamically
-        SET @sql = CONCAT('CALL ', task_database, '.', task_type, '(', 
-            IFNULL(
-                (SELECT 
-                    GROUP_CONCAT(
-                        CASE 
-                            WHEN JSON_TYPE(value) IN ('INTEGER', 'BOOLEAN') THEN value
-                            ELSE CONCAT('"', value, '"')
-                        END
-                        ORDER BY path
-                    )
-                FROM JSON_TABLE(
-                    task_params,
-                    '$[*]' COLUMNS(
-                        path FOR ORDINALITY,
-                        value JSON PATH '$'
-                    )
-                ) AS params),
-                ''
-            ),
-        ')');
+        SET @sql = CONCAT(
+            'CALL ', 
+            task_database, 
+            '.', 
+            task_type, 
+            '(', 
+            QUOTE(task_params),  
+            ')'
+        );
         
         -- Prepare and execute with error handling
         BEGIN
@@ -240,10 +229,7 @@ BEGIN
             COMMIT;
         END;
     END LOOP;
-    
     CLOSE cur;
-    
-    -- Clean up
     SET @sql = NULL;
 END //
 

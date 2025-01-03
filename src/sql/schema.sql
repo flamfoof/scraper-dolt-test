@@ -815,7 +815,7 @@ BEGIN
         'episodeCount', OLD.episodeCount,
         'isActive', OLD.isActive
     ), true);
-    
+
     CALL SeasonsDeleteAudit(jsonData);
 END //
 
@@ -923,10 +923,18 @@ BEFORE DELETE ON Episodes
 FOR EACH ROW
 BEGIN
     DECLARE jsonData JSON;
+    DECLARE seasonContentRefId UUID;
+    
+    -- Get the season ID from the episode
+    SELECT s.contentRefId INTO seasonContentRefId
+    FROM Seasons s
+    WHERE s.contentId = OLD.contentRefId;
+    
     
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'seasonContentRefId', seasonContentRefId,
         'title', OLD.title,
         'altTitle', OLD.altTitle,
         'episodeNumber', OLD.episodeNumber,
@@ -1645,7 +1653,7 @@ BEGIN
 
     CALL CreateGraveyardItem(
         'Movies',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1667,13 +1675,11 @@ CREATE OR REPLACE PROCEDURE SeriesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
-    -- Delete all related
-    -- UPDATE Seasons SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
     DELETE FROM Seasons WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     CALL CreateGraveyardItem(
         'Series',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1695,40 +1701,13 @@ CREATE OR REPLACE PROCEDURE SeasonsDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
-    -- UPDATE Episodes SET isActive = 0 WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
-    -- SET @seasonIsActive = JSON_VALUE(jsonData, '$.isActive');
-
-    -- if(@seasonIsActive = 0) THEN
-    --     DELETE FROM Seasons WHERE contentId = JSON_VALUE(jsonData, '$.contentId');
-    -- END IF;
-    -- Store episode count before deletion
-    -- SET @season_episode_count = (
-    --     SELECT COUNT(*) 
-    --     FROM Episodes 
-    --     WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId')
-    -- );
-    -- SET @series_id = JSON_VALUE(jsonData, '$.contentRefId');
-    -- UPDATE Seasons SET isActive = false WHERE contentId = @series_id;
-    -- SET @seriesIsActive = (
-    --     SELECT isActive 
-    --     FROM Series 
-    --     WHERE contentId = @series_id
-    -- );
-
     -- Delete all episodes
+    CALL QueueSeasonsDeleteBehavior(jsonData);
     DELETE FROM Episodes WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
-
-    -- Update series total episodes if we have a series ID
-    -- IF @seriesIsActive = 1 AND @season_episode_count > 0 THEN
-    --     UPDATE Series 
-    --     SET totalEpisodes = GREATEST(0, totalEpisodes - @season_episode_count),
-    --         totalSeasons = totalSeasons - 1
-    --     WHERE contentId = @series_id;
-    -- END IF;
 
     CALL CreateGraveyardItem(
         'Seasons',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1750,40 +1729,13 @@ CREATE OR REPLACE PROCEDURE EpisodesDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
-    DECLARE v_season_id UUID;
-    DECLARE v_series_id UUID;
-    
-    SET v_season_id = JSON_VALUE(jsonData, '$.contentRefId');
-
+    -- set seasonContentRefId on jsonData to JSON_VALUE(jsonData, '$.contentId');
+    CALL QueueEpisodesDeleteBehavior(jsonData);
     DELETE FROM SeriesDeeplinks WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
-    
-    -- Get the series ID if it exists
-    -- IF v_season_id IS NOT NULL THEN
-    --     SELECT contentRefId INTO v_series_id
-    --     FROM Seasons
-    --     WHERE contentId = v_season_id
-    --     LIMIT 1;
-    -- END IF;
-
-    -- -- Delete deeplinks first
-    -- DELETE FROM SeriesDeeplinks WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
-    
-    -- -- Update counts in parent tables
-    -- IF v_season_id IS NOT NULL THEN
-    --     UPDATE Seasons 
-    --     SET episodeCount = GREATEST(0, episodeCount - 1)
-    --     WHERE contentId = v_season_id;
-        
-    --     IF v_series_id IS NOT NULL THEN
-    --         UPDATE Series
-    --         SET totalEpisodes = GREATEST(0, totalEpisodes - 1)
-    --         WHERE contentId = v_series_id;
-    --     END IF;
-    -- END IF;
 
     CALL CreateGraveyardItem(
         'Episodes',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1810,7 +1762,7 @@ BEGIN
 
     CALL CreateGraveyardItem(
         'MoviesDeeplinks',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1837,7 +1789,7 @@ BEGIN
 
     CALL CreateGraveyardItem(
         'SeriesDeeplinks',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1861,7 +1813,7 @@ CREATE OR REPLACE PROCEDURE MoviesPricesDeleteAudit(
 BEGIN
     CALL CreateGraveyardItem(
         'MoviesPrices',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1885,7 +1837,7 @@ CREATE OR REPLACE PROCEDURE SeriesPricesDeleteAudit(
 BEGIN
     CALL CreateGraveyardItem(
         'SeriesPrices',
-        'tmdb',
+        'Tmdb',
         'deleted',
         'Deleted by user',
         jsonData
@@ -1901,6 +1853,59 @@ BEGIN
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
+END //
+
+-- Queue update procedure for Seasons
+CREATE OR REPLACE PROCEDURE QueueSeasonsDeleteBehavior(
+    IN jsonData JSON
+)
+BEGIN
+    CALL TaskQueue.QueueTask(
+        'Tmdb',
+        'SeasonsDeleteBehavior',
+        jsonData,
+        2,
+        JSON_OBJECT('type', 'SeasonDelete', 'action', 'Update Series episodeCount and deleted', 'param', jsonData)
+    );
+END //
+
+-- Queue update procedure for Episodes
+CREATE OR REPLACE PROCEDURE QueueEpisodesDeleteBehavior(
+    IN jsonData JSON
+)
+BEGIN
+    CALL TaskQueue.QueueTask(
+        'Tmdb',
+        'EpisodesDeleteBehavior',
+        jsonData,
+        3,
+        JSON_OBJECT('type', 'EpisodesDelete', 'action', 'Update Series and Seasons episodeCount and deleted', 'param', jsonData)
+    );
+END //
+
+-- Actual update procedures that will be called by the queue processor
+CREATE OR REPLACE PROCEDURE SeasonsDeleteBehavior(
+    IN jsonData JSON
+)
+BEGIN
+    --update the series seasons count
+    UPDATE Series 
+    SET totalSeasons = totalSeasons - 1 
+    WHERE contentId = JSON_VALUE(jsonData, '$.contentRefId');
+END //
+
+CREATE OR REPLACE PROCEDURE EpisodesDeleteBehavior(
+    IN jsonData JSON
+)
+BEGIN
+    UPDATE Seasons
+    SET episodeCount = episodeCount - 1
+    WHERE contentId = JSON_VALUE(jsonData, '$.contentRefId');
+
+    --update the series and season episode count
+    UPDATE Series
+    SET totalEpisodes = totalEpisodes - 1
+    WHERE contentId = JSON_VALUE(jsonData, '$.seasonContentRefId');
 END //
 
 DELIMITER ;
