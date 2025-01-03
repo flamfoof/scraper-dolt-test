@@ -41,7 +41,8 @@ BEGIN
         SELECT TABLE_NAME 
         FROM information_schema.TABLES 
         WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_TYPE = 'BASE TABLE';
+        AND TABLE_TYPE = 'BASE TABLE'
+        AND TABLE_NAME != 'Users';
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
     
     SET FOREIGN_KEY_CHECKS = 0;
