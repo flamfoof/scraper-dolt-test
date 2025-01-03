@@ -235,7 +235,7 @@ END //
 
 -- CREATE OR REPLACE event to process queue periodically
 CREATE OR REPLACE EVENT ProcessQueueEvent
-ON SCHEDULE EVERY 5 SECOND
+ON SCHEDULE EVERY 15 SECOND
 DO
     CALL ProcessQueueItems(500) //
 
