@@ -222,7 +222,7 @@ export class DatabaseManager {
 		}
 	}
 
-	async cloneTable(sourceDb, destDb, table, batchSize = 10000) {
+	async cloneTable(sourceDb, destDb, table, batchSize = 30000) {
 		// Get total rows for progress tracking
 		const [{ count }] = await this.executeQuery(`SELECT COUNT(*) as count FROM \`${sourceDb}\`.\`${table}\``);
 		const totalRows = BigInt(count);
