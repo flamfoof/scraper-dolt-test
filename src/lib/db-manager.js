@@ -244,7 +244,7 @@ export class DatabaseManager {
 				// Create value strings with actual values properly escaped
 				const valueStrings = rows.map((row) => {
 					const rowValues = columns.map((col) => {
-						const value = row[col];
+						let value = row[col];
 						if (value === null) return "NULL";
 						if (typeof value === "number") return value;
 						if (typeof value === "boolean") return value ? 1 : 0;
@@ -255,6 +255,9 @@ export class DatabaseManager {
 							return JSON.stringify(JSON.stringify(value));
 						}
 						if (value instanceof Date) return `'${value.toISOString().slice(0, 19).replace("T", " ")}'`;
+						if(typeof value === 'string' && value.includes("\\")) {
+							value = value.replaceAll("\\", "\\\\");
+						}
 						return `'${String(value).replace(/'/g, "''")}'`;
 					});
 					return `(${rowValues.join(",")})`;
