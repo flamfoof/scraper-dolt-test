@@ -145,19 +145,19 @@ program
                 throw new Error("Invalid direction. Use 'local' or 'master'");
             }
 
-            // if (options.direction === "master" && !options.force) {
-            //     const { confirm } = await inquirer.prompt([{
-            //         type: 'confirm',
-            //         name: 'confirm',
-            //         message: 'Are you sure you want to clone from local to master? This will overwrite master data. (Dangerous) (y/n)',
-            //         default: false
-            //     }]);
+            if (options.direction === "master" && !options.force) {
+                const { confirm } = await inquirer.prompt([{
+                    type: 'confirm',
+                    name: 'confirm',
+                    message: 'Are you sure you want to clone from local to master? This will overwrite master data. (Dangerous) (y/n)',
+                    default: false
+                }]);
 
-            //     if (!confirm) {
-            //         console.log(chalk.yellow("Operation cancelled by user."));
-            //         process.exit(0);
-            //     }
-            // }
+                if (!confirm) {
+                    console.log(chalk.yellow("Operation cancelled by user."));
+                    process.exit(0);
+                }
+            }
 
             spinner.start();
 
