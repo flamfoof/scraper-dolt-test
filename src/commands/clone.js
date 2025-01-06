@@ -8,6 +8,7 @@ import inquirer from "inquirer";
 config({ path: "./proj.env" });
 
 const program = new Command();
+const MBSize = 1024 * 1024;
 
 program
 	.name("clone")
@@ -97,10 +98,10 @@ program
 			
 			for (const db of databasesToClone) {
 				const { size, tables } = await sourceDb.getDatabaseSize(db);
-				totalSize += size;
+				totalSize += size / MBSize;
 				totalTables += tables;
 				console.log(chalk.cyan(`\n${db}:`));
-				console.log(`  Size: ${(size / 1024 / 1024).toFixed(2)} MB`);
+				console.log(`  Size: ${(size / MBSize).toFixed(2)} MB`);
 				console.log(`  Tables: ${tables}`);
 				
 				if (options.dryRun) {
@@ -115,7 +116,7 @@ program
 			}
 			
 			console.log(chalk.cyan("\nSummary:"));
-			console.log(`  Total Size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+			console.log(`  Total Size: ${(totalSize).toFixed(2)} MB`);
 			console.log(`  Total Tables: ${totalTables}`);
 			console.log(`  Batch Size: ${options.batchSize} rows`);
 
