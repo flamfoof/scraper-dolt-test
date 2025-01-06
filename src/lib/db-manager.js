@@ -297,7 +297,7 @@ export class DatabaseManager {
 				// Execute the batch insert
 				while (retry < 3) {
 					try {
-						await destDb.executeQueryContinuously(insertCommand);
+						await destDb.executeQuery(insertCommand);
 						break;
 					} catch (error) {
 						console.log("Insert command failed, retrying...");
