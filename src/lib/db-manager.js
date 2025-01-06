@@ -228,9 +228,12 @@ export class DatabaseManager {
 		const totalRows = BigInt(count);
 		let offset = 0n;
 		let totalCloned = 0n;
+		let retry = 0;
 
 		while (offset < totalRows) {
 			console.log(`Cloning \`${sourceDb}\`.\`${table}\` into \`${sourceDb}\`.\`${table}\` (${totalCloned}/${totalRows} rows)`);
+
+			// Fetch rows in batches
 			const rows = await this.executeQuery(`SELECT * FROM \`${sourceDb}\`.\`${table}\` LIMIT ? OFFSET ?`, [
 				batchSize,
 				offset,
@@ -241,6 +244,7 @@ export class DatabaseManager {
 			// Prepare batch insert
 			if (rows.length > 0) {
 				const columns = Object.keys(rows[0]);
+				
 				// Create value strings with actual values properly escaped
 				const valueStrings = rows.map((row) => {
 					const rowValues = columns.map((col) => {
@@ -250,19 +254,27 @@ export class DatabaseManager {
 						if (typeof value === "boolean") return value ? 1 : 0;
 						// Escape strings and handle dates
 						if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-							return `'${JSON.stringify(value)}'`;
+							let json = JSON.stringify(value);
+							if(json.includes("'")) {
+								json = json.replaceAll("'", "\\'");
+							}
+							return `'${json}'`;
 						} else if (value && typeof value === 'object' && Array.isArray(value)) {
-							return JSON.stringify(JSON.stringify(value));
+							let json = JSON.stringify(value);
+							if(json.includes("'")) {
+								json = json.replaceAll("'", "\\'");
+							}
+							return `'${json}'`;
 						}
 						if (value instanceof Date) return `'${value.toISOString().slice(0, 19).replace("T", " ")}'`;
 						if(typeof value === 'string' && value.includes("\\")) {
 							value = value.replaceAll("\\", "\\\\");
 						}
-						return `'${String(value).replace(/'/g, "''")}'`;
+						return `'${String(value).replace(/'/g, "\\'")}'`;
 					});
 					return `(${rowValues.join(",")})`;
 				});
-        
+
 				const rowsToAdd = BigInt(rows.length);
 				const percentage = Number((totalCloned + rowsToAdd) * 100n / totalRows);
 				console.log(`Inserting/Updating ${rows.length} rows into \`${sourceDb}\`.\`${table}\` (${percentage.toFixed(2)}% complete)`);
@@ -273,12 +285,34 @@ export class DatabaseManager {
 					.map((col) => `\`${col}\`=VALUES(\`${col}\`)`)
 					.join(",");
 
-				const insertCommand = `INSERT INTO \`${sourceDb}\`.\`${table}\` 
-          (${columns.map((col) => `\`${col}\``).join(",")}) 
-          VALUES ${valueStrings.join(",")}
-          ON DUPLICATE KEY UPDATE ${updatePart};`.replace(/\n/g, " ");
+				// Create a single insert command for all rows
+				const insertCommand = `
+					INSERT INTO \`${sourceDb}\`.\`${table}\` 
+					(${columns.map((col) => `\`${col}\``).join(",")}) 
+					VALUES ${valueStrings.join(",")}
+					ON DUPLICATE KEY UPDATE ${updatePart};
+				`.replace(/\s+/g, " ").trim();
 				
-				await destDb.executeQuery(insertCommand);
+				console.log("Created insert command");
+				// Execute the batch insert
+				while (retry < 3) {
+					try {
+						await destDb.executeQueryContinuously(insertCommand);
+						break;
+					} catch (error) {
+						console.log("Insert command failed, retrying...");
+						console.error(error);
+						// console.log(insertCommand)
+						process.exit(1)
+
+						retry++;
+					}
+				}
+				if (retry === 3) {
+					throw new Error("Insert command failed after 3 retries");
+					process.exit(1)
+				}
+				console.log("Executed insert command");
 				totalCloned += rowsToAdd;
 			}
 
