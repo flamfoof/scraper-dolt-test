@@ -134,7 +134,7 @@ program
 					const tables = await sourceDb.getTables(database);
 					
 					// Get tables in dependency order and reverse for truncation
-					const tableOrder = destDb.getTableDependencyOrder();
+					const tableOrder = destDb.getTmdbTableDependencyOrder();
 
 					tables.sort((a, b) => tableOrder.indexOf(a) - tableOrder.indexOf(b));
 					

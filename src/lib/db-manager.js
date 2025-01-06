@@ -125,29 +125,30 @@ export class DatabaseManager {
 		return rows.map((row) => row.TABLE_NAME);
 	}
 
-	getTableDependencyOrder() {
+	getTmdbTableDependencyOrder() {
 		// Define tables in order of dependencies
 		return [
 			// Independent tables first
 			"Movies",
 			"Series",
 			"ContentTypes",
-			"Scrapers",
 
 			// First level dependencies
 			"Seasons",
 			"MoviesDeeplinks",
-			"ScrapersActivity",
 
 			// Second level dependencies
 			"Episodes",
 
 			// Third level dependencies
-			"EpisodesDeeplinks",
+			"SeriesDeeplinks",
 
 			// Fourth level dependencies
 			"MoviesPrices",
-			"EpisodesPrices",
+			"SeriesPrices",
+
+			// Others
+			"Graveyard",
 
 			// Audit table last (if needed)
 			"AuditLog",
