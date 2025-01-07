@@ -107,9 +107,8 @@ export class DatabaseManager {
 	}
 
 	async getTableRowCount(database, table) {
-		const query = `SELECT COUNT(*) as count FROM \`${database}\`.\`${table}\``;
-		const result = await this.executeQuery(query);
-		return result[0].count;
+		const [result] = await this.executeQuery(`SELECT COUNT(*) as count FROM \`${database}\`.\`${table}\``);
+		return result.count;
 	}
 
 	async getDatabases() {
@@ -119,7 +118,7 @@ export class DatabaseManager {
 
 	async getTables(database) {
 		const rows = await this.executeQuery(
-			`SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '${database}'`
+			`SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '${database}' AND TABLE_NAME != 'Users'`,
 		);
 
 		return rows.map((row) => row.TABLE_NAME);
@@ -220,105 +219,5 @@ export class DatabaseManager {
 			await this.executeQuery("SET FOREIGN_KEY_CHECKS = 1");
 			throw error;
 		}
-	}
-
-	async cloneTable(sourceDb, destDb, table, batchSize = 10000) {
-		// Get total rows for progress tracking
-		const [{ count }] = await this.executeQuery(`SELECT COUNT(*) as count FROM \`${sourceDb}\`.\`${table}\``);
-		const totalRows = BigInt(count);
-		let offset = 0n;
-		let totalCloned = 0n;
-		let retry = 0;
-
-		while (offset < totalRows) {
-			console.log(`Cloning \`${sourceDb}\`.\`${table}\` into \`${sourceDb}\`.\`${table}\` (${totalCloned}/${totalRows} rows)`);
-
-			// Fetch rows in batches
-			const rows = await this.executeQuery(`SELECT * FROM \`${sourceDb}\`.\`${table}\` LIMIT ? OFFSET ?`, [
-				batchSize,
-				offset,
-			]);
-
-			if (rows.length === 0) break;
-
-			// Prepare batch insert
-			if (rows.length > 0) {
-				const columns = Object.keys(rows[0]);
-				
-				// Create value strings with actual values properly escaped
-				const valueStrings = rows.map((row) => {
-					const rowValues = columns.map((col) => {
-						let value = row[col];
-						if (value === null) return "NULL";
-						if (typeof value === "number") return value;
-						if (typeof value === "boolean") return value ? 1 : 0;
-						// Escape strings and handle dates
-						if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-							let json = JSON.stringify(value);
-							if(json.includes("'")) {
-								json = json.replaceAll("'", "\\'");
-							}
-							return `'${json}'`;
-						} else if (value && typeof value === 'object' && Array.isArray(value)) {
-							let json = JSON.stringify(value);
-							if(json.includes("'")) {
-								json = json.replaceAll("'", "\\'");
-							}
-							return `'${json}'`;
-						}
-						if (value instanceof Date) return `'${value.toISOString().slice(0, 19).replace("T", " ")}'`;
-						if(typeof value === 'string' && value.includes("\\")) {
-							value = value.replaceAll("\\", "\\\\");
-						}
-						return `'${String(value).replace(/'/g, "\\'")}'`;
-					});
-					return `(${rowValues.join(",")})`;
-				});
-
-				const rowsToAdd = BigInt(rows.length);
-				const percentage = Number((totalCloned + rowsToAdd) * 100n / totalRows);
-				console.log(`Inserting/Updating ${rows.length} rows into \`${sourceDb}\`.\`${table}\` (${percentage.toFixed(2)}% complete)`);
-
-				// Create the ON DUPLICATE KEY UPDATE part
-				const updatePart = columns
-					.filter((col) => col !== "id") // Exclude primary key from updates
-					.map((col) => `\`${col}\`=VALUES(\`${col}\`)`)
-					.join(",");
-
-				// Create a single insert command for all rows
-				const insertCommand = `
-					INSERT INTO \`${sourceDb}\`.\`${table}\` 
-					(${columns.map((col) => `\`${col}\``).join(",")}) 
-					VALUES ${valueStrings.join(",")}
-					ON DUPLICATE KEY UPDATE ${updatePart};
-				`.replace(/\s+/g, " ").trim();
-				
-				console.log("Created insert command");
-				// Execute the batch insert
-				while (retry < 3) {
-					try {
-						await destDb.executeQuery(insertCommand);
-						break;
-					} catch (error) {
-						console.log("Insert command failed, retrying...");
-						console.error(error);
-						// console.log(insertCommand)
-						process.exit(1)
-
-						retry++;
-					}
-				}
-				if (retry === 3) {
-					throw new Error("Insert command failed after 3 retries");
-					process.exit(1)
-				}
-				console.log("Executed insert command");
-				totalCloned += rowsToAdd;
-			}
-
-			offset += BigInt(batchSize);
-		}
-		
-		console.log(`Completed cloning \`${sourceDb}\`.\`${table}\`: ${totalCloned}/${totalRows} rows`);
 	}
 }

@@ -3,8 +3,12 @@ import ora from "ora";
 import chalk from "chalk";
 import { config } from "dotenv";
 import { DatabaseManager } from "../lib/db-manager.js";
-import inquirer from "inquirer";
+import { promisify } from "util";
+import { exec as execCallback } from "child_process";
+import { unlink } from "fs/promises";
+import path from "path";
 
+const exec = promisify(execCallback);
 config({ path: "./proj.env" });
 
 const program = new Command();
@@ -13,8 +17,7 @@ const MBSize = 1024 * 1024;
 program
 	.name("clone")
 	.description("Clone databases from source to destination")
-	.option("-d, --database <name>", "Specific database to clone")
-	.option("-b, --batch-size <size>", "Batch size for data transfer", "1000")
+	.option("-d, --database <n>", "Specific database to clone")
 	.option("--dry-run", "Show what would be cloned without actually cloning")
 	.option("--direction <direction>", "Clone direction: local or master", "local")
 	.option("--force", "Force push from local to master without confirmation")
@@ -26,20 +29,6 @@ program
 				throw new Error("Invalid direction. Use 'local' or 'master'");
 			}
 
-			if (options.direction === "master" && !options.force) {
-				const { confirm } = await inquirer.prompt([{
-					type: 'confirm',
-					name: 'confirm',
-					message: 'Are you sure you want to clone from local to master? This will overwrite master data. (Dangerous) (y/n)',
-					default: false
-				}]);
-
-				if (!confirm) {
-					console.log(chalk.yellow("Operation cancelled by user."));
-					process.exit(0);
-				}
-			}
-
 			spinner.start();
 
 			// Source and destination configurations based on direction
@@ -48,7 +37,6 @@ program
 				port: parseInt(process.env.MASTER_DB_PORT || "3306"),
 				user: process.env.MASTER_DB_USER,
 				password: process.env.MASTER_DB_PASS,
-				connectionLimit: 5,
 			};
 
 			const localConfig = {
@@ -56,7 +44,6 @@ program
 				port: parseInt(process.env.LOCAL_DB_PORT || "3306"),
 				user: process.env.LOCAL_DB_USER,
 				password: process.env.LOCAL_DB_PASS,
-				connectionLimit: 5,
 			};
 
 			const sourceConfig = options.direction === "local" ? masterConfig : localConfig;
@@ -116,9 +103,8 @@ program
 			}
 			
 			console.log(chalk.cyan("\nSummary:"));
-			console.log(`  Total Size: ${(totalSize).toFixed(2)} MB`);
+			console.log(`  Total Size: ${totalSize.toFixed(2)} MB`);
 			console.log(`  Total Tables: ${totalTables}`);
-			console.log(`  Batch Size: ${options.batchSize} rows`);
 
 			if (options.dryRun) {
 				console.log(chalk.yellow("\n🔍 Dry run completed. No changes were made."));
@@ -126,59 +112,61 @@ program
 				process.exit(0);
 			}
 
-			// Clone each database
+			// Determine which executable to use (mysql/mariadb)
+			const mysqlDumpExec = process.env.DB_EXEC === 'mariadb' ? 'mariadb-dump' : 'mysqldump';
+			const mysqlExec = process.env.DB_EXEC === 'mariadb' ? 'mariadb' : 'mysql';
+
+			// Clone each database using mysqldump
 			for (const database of databasesToClone) {
-				spinner.start(`Cloning database: ${database}`);
-
 				try {
-					// Get and clone tables
-					const tables = await sourceDb.getTables(database);
-					
-					// Get tables in dependency order and reverse for truncation
-					const tableOrder = destDb.getTmdbTableDependencyOrder();
+					spinner.start(`Cloning database: ${database}`);
+					const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+					const dumpFile = path.join(process.cwd(), `${database}_${timestamp}.sql`);
 
-					tables.sort((a, b) => tableOrder.indexOf(a) - tableOrder.indexOf(b));
-					
-					// Truncate destination tables before cloning
-					spinner.text = `Truncating tables in ${database}`;
-					await destDb.truncateInOrder(database, tables);
-					
-					let completedTables = 0;
+					// Create dump command
+					const dumpCmd = `${mysqlDumpExec} -h ${sourceConfig.host} -u ${sourceConfig.user} ` +
+						`-P ${sourceConfig.port} -p${sourceConfig.password} ` +
+						`--single-transaction ${database} > "${dumpFile}"`;
 
-					for (const table of tables) {
-						spinner.text = `Cloning ${database}: ${table} (${completedTables}/${tables.length})`;
-						if(table === 'AuditLog') {
-							await destDb.truncateInOrder(database, ['AuditLog']);
-						}
-						await sourceDb.cloneTable(database, destDb, table, parseInt(options.batchSize));
-						completedTables++;
-					}
+					// Execute dump
+					spinner.text = `Creating dump for ${database}`;
+					await exec(dumpCmd);
 
-					spinner.succeed(`Cloned database: ${database}`);
+					// Drop and recreate destination database
+					spinner.text = `Preparing destination database ${database}`;
+					const dropCmd = `${mysqlExec} -h ${destConfig.host} -u ${destConfig.user} ` +
+						`-P ${destConfig.port} -p${destConfig.password} ` +
+						`-e "DROP DATABASE IF EXISTS ${database}; CREATE DATABASE ${database};"`;
+					await exec(dropCmd);
 
-					// Verify clone
-					const differences = await sourceDb.compareSchemas(database, database);
-					if (differences.length > 0) {
-						console.log(chalk.yellow("\nWarning: Schema differences detected:"));
-						differences.forEach((diff) => {
-							console.log(`- ${diff.table}: ${diff.message}`);
-						});
-					}
+					// Import dump
+					spinner.text = `Importing ${database}`;
+					const importCmd = `${mysqlExec} -h ${destConfig.host} -u ${destConfig.user} ` +
+						`-P ${destConfig.port} -p${destConfig.password} ` +
+						`${database} < "${dumpFile}"`;
+					await exec(importCmd);
+
+					// Clean up dump file
+					await unlink(dumpFile);
+
+					spinner.succeed(`Successfully cloned database: ${database}`);
 				} catch (error) {
+					spinner.fail(`Failed to clone database: ${database}`);
+					console.error(chalk.red(`Error: ${error.message}`));
 					throw error;
 				}
 			}
-
+			
 			spinner.succeed("Clone operation completed successfully");
-
 			
 			// Clean up connections
 			if (sourceDb) await sourceDb.disconnect();
 			if (destDb) await destDb.disconnect();
 		} catch (error) {
-			spinner.fail(`Error: ${error.message}`);
+			spinner.fail("Clone operation failed");
+			console.error(chalk.red(`Error: ${error.message}`));
 			process.exit(1);
 		}
 	});
 
-program.parse();
+program.parse(process.argv);
