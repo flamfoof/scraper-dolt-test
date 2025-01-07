@@ -531,33 +531,35 @@ BEGIN
         'isActive', OLD.isActive
     ), false);
     
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId, 
-        'title', new_display_title,
-        'tmdbId', NEW.tmdbId, 
-        'imdbId', NEW.imdbId, 
-        'rgId', NEW.rgId, 
-        'description', NEW.description, 
-        'releaseDate', NEW.releaseDate, 
-        'posterPath', NEW.posterPath, 
-        'backdropPath', NEW.backdropPath, 
-        'voteAverage', NEW.voteAverage, 
-        'voteCount', NEW.voteCount, 
-        'isActive', NEW.isActive
-    ), false);
-    
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'Movies',
-            NEW.contentId,
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentId', NEW.contentId, 
+            'title', new_display_title,
+            'tmdbId', NEW.tmdbId, 
+            'imdbId', NEW.imdbId, 
+            'rgId', NEW.rgId, 
+            'description', NEW.description, 
+            'releaseDate', NEW.releaseDate, 
+            'posterPath', NEW.posterPath, 
+            'backdropPath', NEW.backdropPath, 
+            'voteAverage', NEW.voteAverage, 
+            'voteCount', NEW.voteCount, 
+            'isActive', NEW.isActive
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'Movies',
+                NEW.contentId,
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -654,37 +656,39 @@ BEGIN
         'totalEpisodes', OLD.totalEpisodes,
         'isActive', OLD.isActive
     ), false);
-    
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId, 
-        'title', NEW.title,
-        'altTitle', NEW.altTitle,
-        'tmdbId', NEW.tmdbId, 
-        'imdbId', NEW.imdbId, 
-        'rgId', NEW.rgId, 
-        'description', NEW.description, 
-        'releaseDate', NEW.releaseDate, 
-        'posterPath', NEW.posterPath, 
-        'backdropPath', NEW.backdropPath, 
-        'voteAverage', NEW.voteAverage, 
-        'voteCount', NEW.voteCount, 
-        'totalSeasons', NEW.totalSeasons,
-        'totalEpisodes', NEW.totalEpisodes,
-        'isActive', NEW.isActive
-    ), false);
-    
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'Series',
-            NEW.contentId,
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentId', NEW.contentId, 
+            'title', NEW.title,
+            'altTitle', NEW.altTitle,
+            'tmdbId', NEW.tmdbId, 
+            'imdbId', NEW.imdbId, 
+            'rgId', NEW.rgId, 
+            'description', NEW.description, 
+            'releaseDate', NEW.releaseDate, 
+            'posterPath', NEW.posterPath, 
+            'backdropPath', NEW.backdropPath, 
+            'voteAverage', NEW.voteAverage, 
+            'voteCount', NEW.voteCount, 
+            'totalSeasons', NEW.totalSeasons,
+            'totalEpisodes', NEW.totalEpisodes,
+            'isActive', NEW.isActive
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'Series',
+                NEW.contentId,
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -771,31 +775,33 @@ BEGIN
         'episodeCount', OLD.episodeCount,
         'isActive', OLD.isActive
     ), false);
-    
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId,
-        'contentRefId', NEW.contentRefId,
-        'title', NEW.title,
-        'seasonNumber', NEW.seasonNumber,
-        'description', NEW.description,
-        'releaseDate', NEW.releaseDate,
-        'posterPath', NEW.posterPath,
-        'episodeCount', NEW.episodeCount,
-        'isActive', NEW.isActive
-    ), false);
-    
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'Seasons', 
-            NEW.contentId, 
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentId', NEW.contentId,
+            'contentRefId', NEW.contentRefId,
+            'title', NEW.title,
+            'seasonNumber', NEW.seasonNumber,
+            'description', NEW.description,
+            'releaseDate', NEW.releaseDate,
+            'posterPath', NEW.posterPath,
+            'episodeCount', NEW.episodeCount,
+            'isActive', NEW.isActive
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'Seasons', 
+                NEW.contentId, 
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -890,32 +896,34 @@ BEGIN
         'isActive', OLD.isActive
     ), false);
     
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId,
-        'contentRefId', NEW.contentRefId,
-        'title', NEW.title,
-        'altTitle', NEW.altTitle,
-        'episodeNumber', NEW.episodeNumber,
-        'description', NEW.description,
-        'releaseDate', NEW.releaseDate,
-        'runtime', NEW.runtime,
-        'voteAverage', NEW.voteAverage,
-        'voteCount', NEW.voteCount,
-        'isActive', NEW.isActive
-    ), false);
-    
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'Episodes', 
-            NEW.contentId, 
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentId', NEW.contentId,
+            'contentRefId', NEW.contentRefId,
+            'title', NEW.title,
+            'altTitle', NEW.altTitle,
+            'episodeNumber', NEW.episodeNumber,
+            'description', NEW.description,
+            'releaseDate', NEW.releaseDate,
+            'runtime', NEW.runtime,
+            'voteAverage', NEW.voteAverage,
+            'voteCount', NEW.voteCount,
+            'isActive', NEW.isActive
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'Episodes', 
+                NEW.contentId, 
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -1066,40 +1074,42 @@ BEGIN
         'isActive', OLD.isActive,
         'tmdbId', OLD.tmdbId
     ), false);
-    
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId,
-        'contentRefId', NEW.contentRefId,
-        'title', new_display_title,
-        'sourceId', NEW.sourceId,
-        'sourceType', NEW.sourceType,
-        'originSource', NEW.originSource,
-        'region', NEW.region,
-        'web', NEW.web,
-        'android', NEW.android,
-        'iOS', NEW.iOS,
-        'androidTv', NEW.androidTv,
-        'fireTv', NEW.fireTv,
-        'lg', NEW.lg,
-        'samsung', NEW.samsung,
-        'tvOS', NEW.tvOS,
-        'roku', NEW.roku,
-        'isActive', NEW.isActive,
-        'tmdbId', NEW.tmdbId
-    ), false);
-    
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'MoviesDeeplinks', 
-            NEW.contentId, 
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+                'contentId', NEW.contentId,
+                'contentRefId', NEW.contentRefId,
+                'title', new_display_title,
+                'sourceId', NEW.sourceId,
+                'sourceType', NEW.sourceType,
+                'originSource', NEW.originSource,
+            'region', NEW.region,
+            'web', NEW.web,
+            'android', NEW.android,
+            'iOS', NEW.iOS,
+            'androidTv', NEW.androidTv,
+            'fireTv', NEW.fireTv,
+            'lg', NEW.lg,
+            'samsung', NEW.samsung,
+            'tvOS', NEW.tvOS,
+            'roku', NEW.roku,
+            'isActive', NEW.isActive,
+            'tmdbId', NEW.tmdbId
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'MoviesDeeplinks', 
+                NEW.contentId, 
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -1242,39 +1252,41 @@ BEGIN
         'tmdbId', OLD.tmdbId
     ), false);
     
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId, 
-        'contentRefId', NEW.contentRefId, 
-        'title', new_display_title,
-        'sourceId', NEW.sourceId, 
-        'sourceType', NEW.sourceType, 
-        'originSource', NEW.originSource, 
-        'region', NEW.region, 
-        'web', NEW.web,
-        'android', NEW.android,
-        'iOS', NEW.iOS,
-        'androidTv', NEW.androidTv,
-        'fireTv', NEW.fireTv,
-        'lg', NEW.lg,
-        'samsung', NEW.samsung,
-        'tvOS', NEW.tvOS,
-        'roku', NEW.roku,
-        'isActive', NEW.isActive,
-        'tmdbId', NEW.tmdbId
-    ), false);
-    
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'SeriesDeeplinks', 
-            NEW.contentId, 
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentId', NEW.contentId, 
+            'contentRefId', NEW.contentRefId, 
+            'title', new_display_title,
+            'sourceId', NEW.sourceId, 
+            'sourceType', NEW.sourceType, 
+            'originSource', NEW.originSource, 
+            'region', NEW.region, 
+            'web', NEW.web,
+            'android', NEW.android,
+            'iOS', NEW.iOS,
+            'androidTv', NEW.androidTv,
+            'fireTv', NEW.fireTv,
+            'lg', NEW.lg,
+            'samsung', NEW.samsung,
+            'tvOS', NEW.tvOS,
+            'roku', NEW.roku,
+            'isActive', NEW.isActive,
+            'tmdbId', NEW.tmdbId
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'SeriesDeeplinks', 
+                NEW.contentId, 
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -1361,31 +1373,33 @@ BEGIN
         'isActive', OLD.isActive
     ), false);
     
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId,
-        'contentRefId', NEW.contentRefId,
-        'region', NEW.region,
-        'buySD', NEW.buySD,
-        'buyHD', NEW.buyHD,
-        'buyUHD', NEW.buyUHD,
-        'rentSD', NEW.rentSD,
-        'rentHD', NEW.rentHD,
-        'rentUHD', NEW.rentUHD,
-        'isActive', NEW.isActive
-    ), false);
-    
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'MoviesPrices', 
-            NEW.contentId, 
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentId', NEW.contentId,
+            'contentRefId', NEW.contentRefId,
+            'region', NEW.region,
+            'buySD', NEW.buySD,
+            'buyHD', NEW.buyHD,
+            'buyUHD', NEW.buyUHD,
+            'rentSD', NEW.rentSD,
+            'rentHD', NEW.rentHD,
+            'rentUHD', NEW.rentUHD,
+            'isActive', NEW.isActive
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'MoviesPrices', 
+                NEW.contentId, 
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -1484,43 +1498,45 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
-    SET newJsonData = GetContentDataJSON(JSON_OBJECT(
-        'contentId', NEW.contentId,
-        'contentRefId', NEW.contentRefId,
-        'region', NEW.region,
-        'buySD', NEW.buySD,
-        'buyHD', NEW.buyHD,
-        'buyUHD', NEW.buyUHD,
-        'rentSD', NEW.rentSD,
-        'rentHD', NEW.rentHD,
-        'rentUHD', NEW.rentUHD,
-        'seriesBuySD', NEW.seriesBuySD,
-        'seriesBuyHD', NEW.seriesBuyHD,
-        'seriesBuyUHD', NEW.seriesBuyUHD,
-        'seriesRentSD', NEW.seriesRentSD,
-        'seriesRentHD', NEW.seriesRentHD,
-        'seriesRentUHD', NEW.seriesRentUHD,
-        'seasonBuySD', NEW.seasonBuySD,
-        'seasonBuyHD', NEW.seasonBuyHD,
-        'seasonBuyUHD', NEW.seasonBuyUHD,
-        'seasonRentSD', NEW.seasonRentSD,
-        'seasonRentHD', NEW.seasonRentHD,
-        'seasonRentUHD', NEW.seasonRentUHD,
-        'isActive', NEW.isActive
-    ), true);        
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentId', NEW.contentId,
+            'contentRefId', NEW.contentRefId,
+            'region', NEW.region,
+            'buySD', NEW.buySD,
+            'buyHD', NEW.buyHD,
+            'buyUHD', NEW.buyUHD,
+            'rentSD', NEW.rentSD,
+            'rentHD', NEW.rentHD,
+            'rentUHD', NEW.rentUHD,
+            'seriesBuySD', NEW.seriesBuySD,
+            'seriesBuyHD', NEW.seriesBuyHD,
+            'seriesBuyUHD', NEW.seriesBuyUHD,
+            'seriesRentSD', NEW.seriesRentSD,
+            'seriesRentHD', NEW.seriesRentHD,
+            'seriesRentUHD', NEW.seriesRentUHD,
+            'seasonBuySD', NEW.seasonBuySD,
+            'seasonBuyHD', NEW.seasonBuyHD,
+            'seasonBuyUHD', NEW.seasonBuyUHD,
+            'seasonRentSD', NEW.seasonRentSD,
+            'seasonRentHD', NEW.seasonRentHD,
+            'seasonRentUHD', NEW.seasonRentUHD,
+            'isActive', NEW.isActive
+        ), true);        
 
-    SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-    
-    IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-        CALL LogAudit(
-            'SeriesPrices', 
-            NEW.contentId, 
-            'update',
-            oldJsonData,
-            changed_json,
-            COALESCE(@username, 'system'),
-            COALESCE(@appContext, 'system')
-        );
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'SeriesPrices', 
+                NEW.contentId, 
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
     END IF;
 END //
 
@@ -1565,34 +1581,50 @@ DROP PROCEDURE IF EXISTS DropAllProcedures; //
 -- Audit helper procedures and functions
 -- Central audit logging procedure
 CREATE OR REPLACE PROCEDURE LogAudit(
-    IN tableName VARCHAR(64),
-    IN contentRefId UUID,
-    IN actionType ENUM('insert', 'update', 'delete', 'restore'),
-    IN oldData JSON,
-    IN newData JSON,
-    IN username VARCHAR(64),
-    IN context ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user')
+    IN p_tableName VARCHAR(64),
+    IN p_contentRefId UUID,
+    IN p_actionType ENUM('insert', 'update', 'delete', 'restore'),
+    IN p_oldData JSON,
+    IN p_newData JSON,
+    IN p_username VARCHAR(64),
+    IN p_context ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user')
 )
 BEGIN
-    INSERT INTO AuditLog (
-        id,
-        contentRefId,
-        tableName,
-        action,
-        username,
-        appContext,
-        oldData,
-        newData
-    ) VALUES (
-        UUID_v7(),
-        contentRefId,
-        tableName,
-        actionType,
-        IFNULL(username, 'system'),
-        IFNULL(context, 'system'),
-        oldData,
-        newData
-    );
+    SET @valid = TRUE;
+    IF(p_actionType = 'insert') THEN
+        SET @count = (
+            SELECT COUNT(*)
+            FROM AuditLog
+            WHERE contentRefId = p_contentRefId
+        );
+
+        IF (@count > 0) THEN
+            SET @valid = FALSE;
+        END IF; 
+    END IF; 
+
+
+    IF(@valid) THEN
+        INSERT INTO AuditLog (
+            id,
+            contentRefId,
+            tableName,
+            action,
+            username,
+            appContext,
+            oldData,
+            newData
+        ) VALUES (
+            UUID_v7(),
+            p_contentRefId,
+            p_tableName,
+            p_actionType,
+            IFNULL(p_username, 'system'),
+            IFNULL(p_context, 'system'),
+            p_oldData,
+            p_newData
+        );
+    END IF;
 END //
 
 CREATE OR REPLACE PROCEDURE CreateGraveyardItem(
