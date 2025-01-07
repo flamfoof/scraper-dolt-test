@@ -1,23 +1,7 @@
-
 # Read and parse the environment file
 SET-LOCATION ..
 $envFile = "./proj.env"
 $envConfig = @{}
-Import-Module Posh-SSH
-
-Write-Output (Get-Module -Name Posh-SSH)
-if (Get-Module -Name Posh-SSH) {
-    Write-Host "Posh-SSH is installed."
-} else {
-    if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        # Relaunch as administrator
-        Start-Process powershell.exe -Verb RunAs "-NoProfile -ExecutionPolicy Bypass  -Command cd '$PWD' ;`"$PSCommandPath`""
-        Exit
-    }
-    Write-Host "Posh-SSH is not installed."
-    Install-Module Posh-SSH
-    Import-Module Posh-SSH -Global
-}
 
 if (Test-Path $envFile) {
     Get-Content $envFile | ForEach-Object {
@@ -32,25 +16,14 @@ if (Test-Path $envFile) {
     exit 1
 }
 
+# Determine which MySQL/MariaDB executables to use
 if($envConfig['DB_EXEC'] -eq 'mariadb') {
-    $mariaExec = $envConfig['DB_EXEC']
-    $mariaDumpExec = $envConfig['DB_EXEC'] + "-dump"
+    $mysqlDumpExec = "mariadb-dump"
 } else {
-    $mariaExec = $envConfig['DB_EXEC']
-    $mariaDumpExec = $envConfig['DB_EXEC'] + "dump"
-}
-
-if(Get-Command "mariadb" -ErrorAction SilentlyContinue) {
-    $mariaLocalExec = "mariadb"
-    $mariaLocalDumpExec = "mariadb" + "-dump"
-} else {
-    $mariaLocalExec = "mysql"
-    $mariaLocalDumpExec = "mysql" + "dump"
+    $mysqlDumpExec = "mysqldump"
 }
 
 # Set variables from environment file
-$SSH_Host = $envConfig['SSH_HOST']
-$SSH_User = $envConfig['SSH_USER']
 $SourceHost = $envConfig['MASTER_DB_HOST']
 $SourceUser = $envConfig['MASTER_DB_USER']
 $SourcePassword = $envConfig['MASTER_DB_PASS']
@@ -60,8 +33,7 @@ $DestinationUser = $envConfig['LOCAL_DB_USER']
 $DestinationPassword = $envConfig['LOCAL_DB_PASS']
 $DestinationPort = $envConfig['LOCAL_DB_PORT']
 $DatabaseNames = $envConfig['CLONE_DATABASES'] -split ','
-$MasterReplUser =$envConfig['MASTER_DB_REPL']
-$MasterReplPass =$envConfig['MASTER_DB_REPL_PASS']
+
 # Display configuration (without passwords)
 Write-Host "Configuration loaded:" -ForegroundColor Cyan
 Write-Host "Source Host: $SourceHost"
@@ -70,131 +42,52 @@ Write-Host "Destination Host: $DestinationHost"
 Write-Host "Destination User: $DestinationUser"
 Write-Host "Databases to clone: $($DatabaseNames -join ', ')"
 
-$mariaLocalConnection = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p""$DestinationPassword"" -N -e "
-# Connect to SSH server tunnel
-$SSH_File = $envConfig['SSH_FILE']
-$SSH_Path = "$env:USERPROFILE\.ssh\$SSH_File".Replace("\", "/")
-$SSH_Execution = "'${SSH_Path}' ${SSH_User}@${SSH_Host}"
-Write-Host "Attempting to connect to ssh: ${SSH_Execution}" -ForegroundColor Cyan
-
-# Function to create a detached SSH session and send commands
-# Import Posh-SSH if not already imported
-
-function SendSSHCommand() {
-    param(
-    [Parameter(Mandatory=$true)]
-    [Renci.SshNet.ShellStream]$session,
+foreach ($database in $DatabaseNames) {
+    Write-Host "Processing database: $database" -ForegroundColor Green
     
-    [Parameter(Mandatory=$true)]
-    [string]$command
-    )
-    # Write-Host $currSession.GetType().FullName -ForegroundColor Green
-
-    $result = Invoke-SSHStreamShellCommand -ShellStream $session -Command $command -Verbose
-    Write-Host $result -ForegroundColor DarkBlue
-}
-
-# try {
-#     # Establish SSH session
-#     $session = New-SSHSession -ComputerName $SSH_Host $SSH_User -Port 22 -KeyFile $SSH_Path -AcceptKey
-#     $sessionShell = New-SSHShellStream 0 -Debug
-# }
-# catch {
-#     Write-Error "An error occurred: $_"
-# }
-
-Start-Sleep -Seconds 1.0
-$initMaster = """CHANGE MASTER TO
-    MASTER_HOST     ='$SourceHost',
-    MASTER_USER     ='$MasterReplUser',
-    MASTER_PASSWORD ='$MasterReplPass',
-    MASTER_LOG_FILE ='mysql-bin.000001',
-    MASTER_LOG_POS  =1;,
-    MASTER_SSL      =1;"""
-
-$startSlave = """STOP SLAVE;
-    START SLAVE;"""
-
-
-#Only run this locally, do not run using SendSSHComamnd
-$startMasterConfig = $mariaLocalConnection + $initMaster
-Write-Host $startMasterConfig -ForegroundColor Green
-Invoke-Expression $startMasterConfig
-
-$startMasterConnection = $mariaLocalConnection + $startSlave
-Write-Host $startMasterConnection -ForegroundColor Green
-Invoke-Expression $startMasterConnection
-exit
-
-
-# Clone each database
-foreach ($Database in $DatabaseNames) {
-    Write-Host "Cloning database: $Database" -ForegroundColor Cyan
-    # Create database SQL command
-    $createDbSQL = 
-        "CREATE DATABASE IF NOT EXISTS tmdb
-        CHARACTER SET utf8mb4
-        COLLATE utf8mb4_unicode_ci;"
-
-    try {
-        Write-Host "Attempting to create database '$Database' on $DestinationHost..." -ForegroundColor Cyan
-        $sqlTableGen = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p""$DestinationPassword"" -e ""$createDbSQL""" 
-        Write-Host $sqlTableGen -ForegroundColor Yellow
-        # Execute the create database command
-        # $result = $mariaExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p"$DestinationPassword" -e $createDbSQL
-        $result = SendSSHCommand -Session $sessionShell -Command $sqlTableGen
-
-
-        exit
+    # Create dump file name with timestamp
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $dumpFile = "mysqldump_${database}_${timestamp}.sql"
+    
+    if ($SourceHost -eq "localhost" -or $SourceHost -eq "127.0.0.1") {
+        # Dumping from local database
+        Write-Host "Dumping from local database..." -ForegroundColor Yellow
+        $dumpCommand = "$mysqlDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p""$SourcePassword"" --single-transaction $database > $dumpFile"
+    } else {
+        # Dumping from remote database
+        Write-Host "Dumping from remote database..." -ForegroundColor Yellow
+        $dumpCommand = "$mysqlDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p""$SourcePassword"" --single-transaction $database > $dumpFile"
+    }
+    
+    # Execute the dump command
+    Write-Host "Creating database dump..." -ForegroundColor Yellow
+    Invoke-Expression $dumpCommand
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Dump created successfully: $dumpFile" -ForegroundColor Green
+        
+        # Clear the destination database first
+        Write-Host "Clearing destination database..." -ForegroundColor Yellow
+        $dropCommand = "mysql -h $DestinationHost -u $DestinationUser -P $DestinationPort -p""$DestinationPassword"" -e ""DROP DATABASE IF EXISTS $database; CREATE DATABASE $database;"""
+        Invoke-Expression $dropCommand
+        
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "Database creation successful or database already exists." -ForegroundColor Green
+            # Import the dump to destination
+            Write-Host "Importing dump to destination database..." -ForegroundColor Yellow
+            $importCommand = "mysql -h $DestinationHost -u $DestinationUser -P $DestinationPort -p""$DestinationPassword"" $database < $dumpFile"
+            Invoke-Expression $importCommand
             
-            # Verify database exists
-            $checkDbSQL = "SELECT SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME 
-                        FROM information_schema.SCHEMATA 
-                        WHERE SCHEMA_NAME = '$Database';"
-            
-            $dbInfo = "$mariaLocalExec -h $DestinationHost -u $DestinationUser -p""$DestinationPassword"" -N -e $checkDbSQL"
-            Write-Host $dbInfo -ForegroundColor Yellow
-            Invoke-Expression $dbInfo
-
-            if ($dbInfo) {
-                Write-Host "`nDatabase Information:" -ForegroundColor Cyan
-                Write-Host $dbInfo
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "Database $database cloned successfully" -ForegroundColor Green
+                # Clean up dump file
+                Remove-Item $dumpFile
+            } else {
+                Write-Host "Error importing database $database" -ForegroundColor Red
             }
         } else {
-            Write-Host "Error creating database: $result" -ForegroundColor Red
-            exit 1
+            Write-Host "Error clearing destination database $database" -ForegroundColor Red
         }
-    } catch {
-        Write-Host "Error occurred: $_" -ForegroundColor Red
-        exit 1
-    }
-    exit
-    # Clone the database
-    try {
-        echo "$mariaDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | $mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
-
-        # Dump and restore in one pipeline
-        $command = "$mariaDumpExec -h $SourceHost -u $SourceUser -P $SourcePort -p`"$SourcePassword`" --single-transaction --quick --lock-tables=false $Database | $mariaLocalExec -h $DestinationHost -u $DestinationUser -P $DestinationPort -p`"$DestinationPassword`" $Database"
-        
-        Invoke-Expression $command
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Successfully cloned $Database" -ForegroundColor Green
-        } else {
-            Write-Host "Error cloning $Database" -ForegroundColor Red
-        }
-    }
-    catch {
-        Write-Host "Failed to clone $Database" -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
+    } else {
+        Write-Host "Error creating dump for database $database" -ForegroundColor Red
     }
 }
-
-if ($session) {
-    Remove-SSHSession -SessionId $session.SessionId | Out-Null
-    Write-Host "SSH session closed."
-}
-
-Start-Sleep -Seconds 1.0
