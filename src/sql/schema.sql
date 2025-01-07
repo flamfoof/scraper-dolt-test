@@ -269,12 +269,12 @@ CREATE OR REPLACE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     contentRefId UUID NOT NULL COMMENT 'Reference to the content being audited',
     tableName VARCHAR(64) NOT NULL,
-    action ENUM('create', 'insert', 'update', 'delete', 'restore') NOT NULL,
+    action ENUM('create', 'insert', 'update', 'delete', 'restore', 'destroyed') NOT NULL,
     username VARCHAR(64) NULL COMMENT 'Username of who made the change',
     appContext ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user') NOT NULL DEFAULT 'system',
     oldData JSON NULL,
     newData JSON NULL,
-    CONSTRAINT PRIMARY KEY (id)
+    CONSTRAINT AuditLog_PK PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS Users (
@@ -299,9 +299,10 @@ DROP TABLE IF EXISTS Deeplinks;
 
 -- Graveyard table for tracking failed content and links
 CREATE OR REPLACE TABLE Graveyard (
-    id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
+    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
+    contentId UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     contentRefId UUID NULL COMMENT 'Reference to the original content ID if available',
-    reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other') NOT NULL,
+    reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other', 'resolved') NOT NULL,
     contentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices') NOT NULL,
     sourceId VARCHAR(128) NULL COMMENT 'External ID from the source (e.g., TMDB ID, IMDB ID)',
     sourceType VARCHAR(64) NULL COMMENT 'Source of the content (e.g., tmdb, imdb, reelgood)',
@@ -1573,6 +1574,55 @@ BEGIN
     CALL SeriesPricesDeleteAudit(jsonData);
 END //
 
+CREATE OR REPLACE TRIGGER Graveyard_Update_Audit
+AFTER UPDATE ON Graveyard
+FOR EACH ROW
+BEGIN
+DECLARE oldJsonData, newJsonData, changed_json JSON;
+    SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
+        'contentRefId', OLD.contentRefId,
+        'reason', OLD.reason,
+        'contentType', OLD.contentType,
+        'sourceId', OLD.sourceId,
+        'sourceType', OLD.sourceType,
+        'title', OLD.title,
+        'altTitle', OLD.altTitle,
+        'details', OLD.details,
+        'rawData', OLD.rawData,
+        'username', OLD.username,
+        'appContext', OLD.appContext
+    ), false);
+    
+    IF(oldJsonData IS NOT NULL) THEN
+        SET newJsonData = GetContentDataJSON(JSON_OBJECT(
+            'contentRefId', NEW.contentRefId,
+            'reason', NEW.reason,
+            'contentType', NEW.contentType,
+            'sourceId', NEW.sourceId,
+            'sourceType', NEW.sourceType,
+            'title', NEW.title,
+            'altTitle', NEW.altTitle,
+            'details', NEW.details,
+            'rawData', NEW.rawData,
+            'username', NEW.username,
+            'appContext', NEW.appContext
+        ), false);
+        
+        SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
+        
+        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+            CALL LogAudit(
+                'Graveyard',
+                NEW.contentId,
+                'update',
+                oldJsonData,
+                changed_json,
+                COALESCE(@username, 'system'),
+                COALESCE(@appContext, 'system')
+            );
+        END IF;
+    END IF;
+END //
 
 CALL DropAllProcedures(); //
 DROP PROCEDURE IF EXISTS DropAllProcedures; //
@@ -1581,9 +1631,9 @@ DROP PROCEDURE IF EXISTS DropAllProcedures; //
 -- Audit helper procedures and functions
 -- Central audit logging procedure
 CREATE OR REPLACE PROCEDURE LogAudit(
-    IN p_tableName VARCHAR(64),
+    IN p_tableName VARCHAR(64) COLLATE utf8mb4_unicode_ci,
     IN p_contentRefId UUID,
-    IN p_actionType ENUM('insert', 'update', 'delete', 'restore'),
+    IN p_actionType ENUM('insert', 'update', 'delete', 'restore', 'destroyed'),
     IN p_oldData JSON,
     IN p_newData JSON,
     IN p_username VARCHAR(64),
@@ -1591,18 +1641,28 @@ CREATE OR REPLACE PROCEDURE LogAudit(
 )
 BEGIN
     SET @valid = TRUE;
-    IF(p_actionType = 'insert') THEN
-        SET @count = (
-            SELECT COUNT(*)
-            FROM AuditLog
-            WHERE contentRefId = p_contentRefId
-        );
-
-        IF (@count > 0) THEN
-            SET @valid = FALSE;
-        END IF; 
-    END IF; 
-
+    CASE 
+        WHEN p_actionType = 'insert' THEN
+            BEGIN
+                SET @count = (
+                    SELECT COUNT(*)
+                    FROM AuditLog
+                    WHERE contentRefId = p_contentRefId AND action = 'insert'
+                );
+                IF (@count > 0) THEN
+                    SET @valid = FALSE;
+                END IF;
+            END;
+        WHEN p_actionType = 'delete' THEN
+            BEGIN
+                UPDATE AuditLog 
+                    SET action = 'destroyed'
+                WHERE contentRefId = p_contentRefId AND action = 'insert';
+            END;
+        ELSE 
+            BEGIN
+            END;
+    END CASE; 
 
     IF(@valid) THEN
         INSERT INTO AuditLog (
@@ -1630,13 +1690,15 @@ END //
 CREATE OR REPLACE PROCEDURE CreateGraveyardItem(
     dataContentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices'),
     dataSourceType TEXT,
-    dataReason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other'),
+    dataReason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other', 'resolved'),
     dataDetails TEXT,
     jsonData JSON
 )
 BEGIN
     DECLARE thisDataContent ENUM('Movies', 'Series', 'Seasons', 'Episodes');
     DECLARE contentIdType UUID;
+    DECLARE graveyardId UUID;
+    SET graveyardId = UUID_v7();
 
     CASE dataContentType
         WHEN dataContentType = 'Movies' THEN 
@@ -1646,9 +1708,27 @@ BEGIN
         ELSE 
             SET contentIdType = JSON_VALUE(jsonData, '$.contentRefId');
     END CASE;
-    
+
+    SET @graveCount = (
+        SELECT COUNT(*)
+        FROM Graveyard
+        WHERE contentRefId = contentIdType
+    );
+
+    IF(@graveCount = 0) THEN
+        CALL LogAudit(
+            'Graveyard', 
+            graveyardId, 
+            'insert',
+            NULL,
+            jsonData,
+            COALESCE(@username, 'system'),
+            COALESCE(@appContext, 'system')
+        );
+    END IF;
+
     INSERT INTO Graveyard (
-        id,
+        contentId,
         contentRefId,
         reason,
         contentType,
@@ -1661,7 +1741,7 @@ BEGIN
         username,
         appContext
     ) VALUES (
-        UUID_v7(),
+        graveyardId,
         contentIdType,
         dataReason,
         dataContentType,
@@ -1673,7 +1753,17 @@ BEGIN
         jsonData,
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
-    );
+    ) ON DUPLICATE KEY UPDATE
+        reason = VALUES(reason),
+        contentType = VALUES(contentType),
+        sourceId = VALUES(sourceId),
+        sourceType = VALUES(sourceType),
+        title = VALUES(title),
+        altTitle = VALUES(altTitle),
+        details = VALUES(details),
+        rawData = VALUES(rawData),
+        username = VALUES(username),
+        appContext = VALUES(appContext);
 END //
 
 -- Movies delete audit procedure
