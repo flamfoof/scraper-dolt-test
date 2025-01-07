@@ -204,7 +204,7 @@ program
 	.option("--reset", "Reset the database (WARNING: This will delete all data)")
 	.option("--sample-data", "Run tests.sql to generate sample data")
 	.option("--debug", "Enable debug logging")
-	.option("--connection [type]", "Database connection type (local/master)", "local")
+	.option("--direction [type]", "Database connection type (local/master)", "local")
 	.action(async (options) => {
 		const spinner = ora("Setting up database").start();
 
@@ -213,11 +213,11 @@ program
 				reset: options.reset,
 				sampleData: options.sampleData,
 				debug: options.debug,
-				connection: options.connection,
+				direction: options.direction,
 			});
 
 			// Check if using master connection
-			if (options.connection.toLowerCase() === "master") {
+			if (options.direction.toLowerCase() === "master") {
 				spinner.stop();
 				const { confirm } = await inquirer.prompt([
 					{
@@ -239,7 +239,7 @@ program
 
 			// Determine connection configuration based on type
 			const connectionConfig =
-				options.connection.toLowerCase() === "master"
+				options.direction.toLowerCase() === "master"
 					? {
 							host: process.env.MASTER_DB_HOST,
 							user: process.env.MASTER_DB_USER,
