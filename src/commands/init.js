@@ -77,6 +77,7 @@ const initializeMariaDB = async (spinner, options) => {
 			innodb_flush_log_at_trx_commit: 2,
 			lower_case_table_names: 2,
 			event_scheduler: 1,
+			expire_logs_days: 7,
 
 			//   'pid-file': `${currDir}/mysql/mysql.pid`,
 			// 'general_log_file': `${currDir}/mysql/logs/mysql.log`,
