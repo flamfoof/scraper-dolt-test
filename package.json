@@ -14,7 +14,7 @@
     "setup:master": "bun run src/commands/setup.js --connection master",
     "setup:local": "bun run src/commands/setup.js --connection local",
     "clone": "bun run src/commands/clone.js",
-    "diff": "bun run src/commands/clone-diff.js",
+    "cloneDiff": "bun run src/commands/cloneDiff.js",
     "test": "bun test"
   },
   "dependencies": {
