@@ -399,7 +399,7 @@ BEGIN
             WHEN 'STRING' THEN
                 SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
             WHEN 'INTEGER' THEN
-                SET result = JSON_SET(result, CONCAT('$.', current_key), CAST(current_value AS DECIMAL(10,2)));
+                SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
             WHEN 'BOOLEAN' THEN
                 SET result = JSON_SET(result, CONCAT('$.', current_key), current_value);
             WHEN 'DECIMAL' THEN
