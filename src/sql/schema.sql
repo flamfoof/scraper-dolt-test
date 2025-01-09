@@ -117,7 +117,7 @@ CREATE OR REPLACE TABLE Episodes (
     title VARCHAR(255) NOT NULL,
     altTitle VARCHAR(255) NULL,
     description TEXT NULL,
-    episodeNumber SMALLINT DEFAULT -1 NOT NULL,
+    episodeNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
     runtime SMALLINT UNSIGNED NULL COMMENT 'Runtime in minutes',
     releaseDate DATE NULL,
     voteAverage DECIMAL(3,1) NULL,
