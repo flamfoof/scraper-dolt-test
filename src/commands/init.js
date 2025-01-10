@@ -71,8 +71,9 @@ const initializeMariaDB = async (spinner, options) => {
 			"log-error": `${currDir}/mysql/logs/error.log`,
 			slow_query_log_file: `${currDir}/mysql/logs/slow_query.log`,
 			slow_query_log: 1,
-			innodb_buffer_pool_size: "256M",
-			innodb_log_file_size: "50M",
+			innodb_buffer_pool_size: "4G",
+			innodb_log_file_size: "1G",
+			thread_cache_size: 50,
 			max_connections: 100,
 			innodb_flush_log_at_trx_commit: 2,
 			lower_case_table_names: 2,
@@ -100,6 +101,9 @@ const initializeMariaDB = async (spinner, options) => {
 			//   'ssl': 'false',
 			//   'character-set-server': 'utf8mb4',
 			//   'collation-server': 'utf8mb4_general_ci',
+		},
+		mysqldump: {
+			quick: null,
 		},
 	};
 
