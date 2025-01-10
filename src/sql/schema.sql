@@ -477,7 +477,7 @@ BEFORE INSERT ON Movies
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
-    DECLARE jsonData, changed_json JSON;
+    DECLARE jsonData JSON;
 
     SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
 
@@ -495,8 +495,6 @@ BEGIN
         'voteCount', NEW.voteCount,
         'isActive', NEW.isActive
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'Movies', 
@@ -595,8 +593,6 @@ BEGIN
         'isDupe', OLD.isDupe
     ), true);
 
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
-
     CALL MoviesDeleteAudit(jsonData);
 END //
 
@@ -625,8 +621,6 @@ BEGIN
         'totalEpisodes', NEW.totalEpisodes,
         'isActive', NEW.isActive
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'Series',
@@ -729,8 +723,6 @@ BEGIN
         'totalEpisodes', OLD.totalEpisodes,
         'isActive', OLD.isActive
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL SeriesDeleteAudit(jsonData);
 END //
@@ -755,8 +747,6 @@ BEGIN
         'episodeCount', NEW.episodeCount,
         'isActive', NEW.isActive
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL LogAudit(
         'Seasons', 
@@ -834,8 +824,6 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
-
     CALL SeasonsDeleteAudit(jsonData);
 END //
 
@@ -876,8 +864,6 @@ BEGIN
         'voteCount', NEW.voteCount,
         'isActive', NEW.isActive
     ), false);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL LogAudit(
         'Episodes',
@@ -969,8 +955,6 @@ BEGIN
         'voteCount', OLD.voteCount,
         'isActive', OLD.isActive
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL EpisodesDeleteAudit(jsonData);
 END //
@@ -1048,8 +1032,6 @@ BEGIN
         'tvOS', NEW.tvOS,
         'roku', NEW.roku
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'MoviesDeeplinks', 
@@ -1162,8 +1144,6 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
-
     CALL MoviesDeeplinksDeleteAudit(jsonData);
 END //
 
@@ -1230,8 +1210,6 @@ BEGIN
     ELSE
         SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     END IF;
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL LogAudit(
         'SeriesDeeplinks', 
@@ -1343,8 +1321,6 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
-
     CALL SeriesDeeplinksDeleteAudit(jsonData);
 END //
 
@@ -1367,8 +1343,6 @@ BEGIN
         'rentUHD', NEW.rentUHD,
         'isActive', NEW.isActive
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'MoviesPrices', 
@@ -1449,8 +1423,6 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
-
     CALL MoviesPricesDeleteAudit(jsonData);
 END //
 
@@ -1485,8 +1457,6 @@ BEGIN
         'seasonRentUHD', NEW.seasonRentUHD,
         'isActive', NEW.isActive
     ), true);
-
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'SeriesPrices', 
@@ -1601,8 +1571,6 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
-    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
-
     CALL SeriesPricesDeleteAudit(jsonData);
 END //
 
@@ -1672,6 +1640,8 @@ CREATE OR REPLACE PROCEDURE LogAudit(
     IN p_context ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user')
 )
 BEGIN
+    DECLARE this_oldData, this_newData JSON;
+
     SET @valid = TRUE;
     CASE 
         WHEN p_actionType = 'insert' THEN
@@ -1684,12 +1654,14 @@ BEGIN
                 IF (@count > 0) THEN
                     SET @valid = FALSE;
                 END IF;
+                SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
             END;
         WHEN p_actionType = 'delete' THEN
             BEGIN
                 UPDATE AuditLog 
                     SET action = 'destroyed'
                 WHERE contentRefId = p_contentRefId AND action = 'insert';
+                SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
             END;
         ELSE 
             BEGIN
@@ -1713,8 +1685,8 @@ BEGIN
             p_actionType,
             IFNULL(p_username, 'system'),
             IFNULL(p_context, 'system'),
-            p_oldData,
-            p_newData
+            this_oldData,
+            this_newData
         );
     END IF;
 END //
