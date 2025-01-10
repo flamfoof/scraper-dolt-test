@@ -477,7 +477,7 @@ BEFORE INSERT ON Movies
 FOR EACH ROW
 BEGIN
     DECLARE display_title VARCHAR(255);
-    DECLARE jsonData JSON;
+    DECLARE jsonData, changed_json JSON;
 
     SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
 
@@ -495,7 +495,9 @@ BEGIN
         'voteCount', NEW.voteCount,
         'isActive', NEW.isActive
     ), true);
-    
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
+
     CALL LogAudit(
         'Movies', 
         NEW.contentId, 
@@ -592,7 +594,9 @@ BEGIN
         'isActive', OLD.isActive,
         'isDupe', OLD.isDupe
     ), true);
-    
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
+
     CALL MoviesDeleteAudit(jsonData);
 END //
 
@@ -621,7 +625,9 @@ BEGIN
         'totalEpisodes', NEW.totalEpisodes,
         'isActive', NEW.isActive
     ), true);
-    
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
+
     CALL LogAudit(
         'Series',
         NEW.contentId,
@@ -723,6 +729,8 @@ BEGIN
         'totalEpisodes', OLD.totalEpisodes,
         'isActive', OLD.isActive
     ), true);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL SeriesDeleteAudit(jsonData);
 END //
@@ -747,6 +755,8 @@ BEGIN
         'episodeCount', NEW.episodeCount,
         'isActive', NEW.isActive
     ), true);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL LogAudit(
         'Seasons', 
@@ -824,6 +834,8 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
+
     CALL SeasonsDeleteAudit(jsonData);
 END //
 
@@ -864,6 +876,8 @@ BEGIN
         'voteCount', NEW.voteCount,
         'isActive', NEW.isActive
     ), false);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL LogAudit(
         'Episodes',
@@ -955,6 +969,8 @@ BEGIN
         'voteCount', OLD.voteCount,
         'isActive', OLD.isActive
     ), true);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL EpisodesDeleteAudit(jsonData);
 END //
@@ -1032,6 +1048,8 @@ BEGIN
         'tvOS', NEW.tvOS,
         'roku', NEW.roku
     ), true);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'MoviesDeeplinks', 
@@ -1144,6 +1162,8 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
+
     CALL MoviesDeeplinksDeleteAudit(jsonData);
 END //
 
@@ -1210,6 +1230,8 @@ BEGIN
     ELSE
         SET display_title = GetDisplayTitle(NEW.title, NEW.altTitle);
     END IF;
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
     
     CALL LogAudit(
         'SeriesDeeplinks', 
@@ -1321,6 +1343,8 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
+
     CALL SeriesDeeplinksDeleteAudit(jsonData);
 END //
 
@@ -1343,6 +1367,8 @@ BEGIN
         'rentUHD', NEW.rentUHD,
         'isActive', NEW.isActive
     ), true);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'MoviesPrices', 
@@ -1423,6 +1449,8 @@ BEGIN
         'isActive', OLD.isActive
     ), true);
 
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
+
     CALL MoviesPricesDeleteAudit(jsonData);
 END //
 
@@ -1457,6 +1485,8 @@ BEGIN
         'seasonRentUHD', NEW.seasonRentUHD,
         'isActive', NEW.isActive
     ), true);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL LogAudit(
         'SeriesPrices', 
@@ -1570,6 +1600,8 @@ BEGIN
         'seasonRentUHD', OLD.seasonRentUHD,
         'isActive', OLD.isActive
     ), true);
+
+    SET jsonData = GetChangedFieldsJSON(JSON_OBJECT(), jsonData);
 
     CALL SeriesPricesDeleteAudit(jsonData);
 END //
