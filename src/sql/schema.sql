@@ -114,7 +114,7 @@ CREATE OR REPLACE TABLE Episodes (
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
-    title VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
     altTitle VARCHAR(255) NULL,
     description TEXT NULL,
     episodeNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
