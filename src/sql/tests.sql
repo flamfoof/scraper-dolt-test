@@ -10,6 +10,7 @@ BEGIN
     DECLARE movie_content_id UUID;
     DECLARE series_content_id UUID;
     DECLARE season_content_id UUID;
+    DECLARE season_content_id_2 UUID;
     DECLARE episode_content_id UUID;
     DECLARE movie_deeplink_id UUID;
     DECLARE episode_deeplink_id UUID;
@@ -22,6 +23,7 @@ BEGIN
         SET movie_content_id = UUID();
         SET series_content_id = UUID();
         SET season_content_id = UUID();
+        SET season_content_id_2 = UUID();
         SET episode_content_id = UUID();
         SET movie_deeplink_id = UUID();
         SET episode_deeplink_id = UUID();
@@ -127,11 +129,15 @@ BEGIN
         
         -- Insert a season
         INSERT INTO Seasons (contentId, contentRefId, seasonNumber)
-        VALUES (season_content_id, series_content_id, 1);
+        VALUES (season_content_id, series_content_id, 1),
+        (season_content_id_2, series_content_id, 2);
         
         -- Insert an episode
         INSERT INTO Episodes (contentId, contentRefId, episodeNumber, title, tmdbId, releaseDate)
-        VALUES (episode_content_id, season_content_id, 1, CONCAT('Episode ', i), i+1000, episode_release_date);
+        VALUES (episode_content_id, season_content_id, 1, CONCAT('Episode ', i), i+1000, episode_release_date),
+        (UUID(), season_content_id, 2, CONCAT('Episode ', i), i+6000000, episode_release_date),
+        (UUID(), season_content_id, 3, CONCAT('Episode ', i), i+6000001, episode_release_date),
+        (UUID(), season_content_id_2, 4, CONCAT('Episode ', i), i+6000002, episode_release_date);
         
         -- Create multiple deeplinks for the same episode with different sources
         INSERT INTO SeriesDeeplinks (
@@ -249,11 +255,6 @@ BEGIN
     END WHILE;
 END //
 
-DELIMITER ;
-
-CALL InsertRandomData();
-
-DELIMITER //
 
 CREATE OR REPLACE PROCEDURE TestTableUpdatesWithCount(IN update_count INT)
 BEGIN
@@ -335,7 +336,6 @@ BEGIN
     UPDATE Series 
     SET 
         title = CONCAT(title, ' - Remastered'),
-        totalSeasons = totalSeasons + 1,
         releaseDate = DATE_ADD(releaseDate, INTERVAL 1 YEAR),
         isActive = NOT isActive
     WHERE contentId IN (SELECT contentId FROM tmp_series_original);
@@ -442,14 +442,6 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_series_prices_ids;
 END //
 
-DELIMITER ;
-
--- Example usage:
-CALL TestTableUpdatesWithCount(5);
-
--- Test partial content deletion
-DELIMITER //
-
 CREATE OR REPLACE PROCEDURE TestPartialDeletion()
 BEGIN
     -- Declare variables for test data
@@ -512,73 +504,15 @@ BEGIN
         (deeplink_id1, episode_id1, 1, 'netflix', 'Netflix Link 1'),
         (deeplink_id2, episode_id2, 1, 'netflix', 'Netflix Link 2');
     
-    -- Verify initial state
-    -- SELECT COUNT(*) = 2 INTO @test_result FROM Series;
-    -- CALL AssertTrue(@test_result, 'Should have 2 series');
-    
-    -- SELECT COUNT(*) = 2 INTO @test_result FROM Seasons;
-    -- CALL AssertTrue(@test_result, 'Should have 2 seasons');
-    
-    -- SELECT COUNT(*) = 2 INTO @test_result FROM Episodes;
-    -- CALL AssertTrue(@test_result, 'Should have 2 episodes');
-    
-    -- SELECT COUNT(*) = 2 INTO @test_result FROM SeriesDeeplinks;
-    -- CALL AssertTrue(@test_result, 'Should have 2 deeplinks');
-    -- COMMIT;
-    
     -- Delete one series (should cascade to its season, episode, and deeplink)
     DELETE FROM Series WHERE contentId = content_id1;
     DELETE FROM Movies WHERE contentId = content_id1;
     -- DELETE FROM MoviesDeeplinks WHERE contentRefId = content_id1;
     COMMIT;
-    
-    -- Verify series 1 and its children are deleted
-    -- SELECT COUNT(*) = 0 INTO @test_result FROM Series WHERE contentId = series_id1;
-    -- CALL AssertTrue(@test_result, 'Series 1 should be deleted');
-    
-    -- SELECT COUNT(*) = 0 INTO @test_result FROM Seasons WHERE contentRefId = series_id1;
-    -- CALL AssertTrue(@test_result, 'Season from Series 1 should be deleted');
-    
-    -- SELECT COUNT(*) = 0 INTO @test_result FROM Episodes WHERE contentRefId = season_id1;
-    -- CALL AssertTrue(@test_result, 'Episode from Series 1 should be deleted');
-    
-    -- SELECT COUNT(*) = 0 INTO @test_result FROM SeriesDeeplinks WHERE contentRefId = episode_id1;
-    -- CALL AssertTrue(@test_result, 'Deeplink from Series 1 should be deleted');
-    
-    -- -- Verify series 2 and its children still exist
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM Series WHERE contentId = series_id2;
-    -- CALL AssertTrue(@test_result, 'Series 2 should still exist');
-    
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM Seasons WHERE contentRefId = series_id2;
-    -- CALL AssertTrue(@test_result, 'Season from Series 2 should still exist');
-    
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM Episodes WHERE contentRefId = season_id2;
-    -- CALL AssertTrue(@test_result, 'Episode from Series 2 should still exist');
-    
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM SeriesDeeplinks WHERE contentRefId = episode_id2;
-    -- CALL AssertTrue(@test_result, 'Deeplink from Series 2 should still exist');
-    
-    -- -- Verify Graveyard entries
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = series_id1 AND contentType = 'Series';
-    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted series');
-    
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = season_id1 AND contentType = 'Seasons';
-    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted season');
-    
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = episode_id1 AND contentType = 'Episodes';
-    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted episode');
-    
-    -- SELECT COUNT(*) = 1 INTO @test_result FROM Graveyard WHERE contentId = deeplink_id1 AND contentType = 'SeriesDeeplinks';
-    -- CALL AssertTrue(@test_result, 'Should have Graveyard entry for deleted deeplink');
-    
-    -- Cleanup
-    -- ROLLBACK;
 END //
 
 DELIMITER ;
 
--- Run the test
-CALL TestPartialDeletion();
 
 use TaskQueue;
 -- Process Queue Test Procedures
@@ -702,9 +636,6 @@ BEGIN
 END //
 
 DELIMITER ;
-
--- Run the ProcessQueue tests
-CALL TestProcessQueue();
 
 -- Switch to Scrapers database for test data generation
 USE Scrapers;
@@ -860,14 +791,26 @@ END //
 DELIMITER ;
 
 
+
+CALL Tmdb.InsertRandomData();
+
+-- Example usage:
+CALL Tmdb.TestTableUpdatesWithCount(5);
+
 -- Call the procedure to generate test data
-CALL InsertScraperTestData();
+CALL Scrapers.InsertScraperTestData();
+
+-- Run the test
+CALL Tmdb.TestPartialDeletion();
+
+-- Run the ProcessQueue tests
+CALL TaskQueue.TestProcessQueue();
 
 -- Sample data generation procedure
-DROP PROCEDURE IF EXISTS InsertRandomData;
-DROP PROCEDURE IF EXISTS InsertScraperTestData;
-DROP PROCEDURE IF EXISTS TestPartialDeletion;
--- DROP PROCEDURE IF EXISTS TestTableUpdatesWithCount;
--- DROP PROCEDURE IF EXISTS TestProcessQueue;
--- DROP PROCEDURE IF EXISTS TestUpdateCounter;
--- DROP PROCEDURE IF EXISTS TestFailingProcedure;
+DROP PROCEDURE IF EXISTS Tmdb.InsertRandomData;
+DROP PROCEDURE IF EXISTS Scrapers.InsertScraperTestData;
+DROP PROCEDURE IF EXISTS Tmdb.TestPartialDeletion;
+-- DROP PROCEDURE IF EXISTS Tmdb.TestTableUpdatesWithCount;
+-- DROP PROCEDURE IF EXISTS TaskQueue.TestProcessQueue;
+-- DROP PROCEDURE IF EXISTS TaskQueue.TestUpdateCounter;
+-- DROP PROCEDURE IF EXISTS TaskQueue.TestFailingProcedure;
