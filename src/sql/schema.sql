@@ -678,18 +678,31 @@ BEGIN
         ), false);
         
         SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-        
-        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-            CALL LogAudit(
-                'Series',
-                NEW.contentId,
-                'update',
-                oldJsonData,
-                changed_json,
-                COALESCE(@username, 'system'),
-                COALESCE(@appContext, 'system')
-            );
-        END IF;
+
+        LogIt:BEGIN
+            IF (JSON_LENGTH(JSON_KEYS(changed_json)) = 1 
+                AND JSON_EXTRACT(changed_json, '$.totalEpisodes') IS NOT NULL) THEN
+                    LEAVE LogIt;
+            END IF;
+
+            IF (JSON_LENGTH(JSON_KEYS(changed_json)) = 2 
+                AND JSON_EXTRACT(changed_json, '$.totalEpisodes') IS NOT NULL
+                AND JSON_EXTRACT(changed_json, '$.totalSeasons') IS NOT NULL) THEN
+                    LEAVE LogIt;
+            END IF;
+
+            IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+                CALL LogAudit(
+                    'Series',
+                    NEW.contentId,
+                    'update',
+                    oldJsonData,
+                    changed_json,
+                    COALESCE(@username, 'system'),
+                    COALESCE(@appContext, 'system')
+                );
+            END IF;
+        END LogIt;
     END IF;
 END //
 
@@ -791,18 +804,24 @@ BEGIN
         ), false);
         
         SET changed_json = GetChangedFieldsJSON(oldJsonData, newJsonData);
-        
-        IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
-            CALL LogAudit(
-                'Seasons', 
-                NEW.contentId, 
-                'update',
-                oldJsonData,
-                changed_json,
-                COALESCE(@username, 'system'),
-                COALESCE(@appContext, 'system')
-            );
-        END IF;
+        LogIt:BEGIN
+            IF JSON_LENGTH(JSON_KEYS(changed_json)) > 0 THEN
+                -- if changed_json is not just only episodeCount changes, then skip
+                IF (JSON_LENGTH(JSON_KEYS(changed_json)) = 1 AND JSON_EXTRACT(changed_json, '$.episodeCount') IS NOT NULL) THEN
+                    LEAVE LogIt;
+                END IF;
+
+                CALL LogAudit(
+                    'Seasons', 
+                    NEW.contentId, 
+                    'update',
+                    oldJsonData,
+                    changed_json,
+                    COALESCE(@username, 'system'),
+                    COALESCE(@appContext, 'system')
+                );
+            END IF;
+        END LogIt;
     END IF;
 END //
 
@@ -835,21 +854,55 @@ BEGIN
     DECLARE display_title VARCHAR(255);
     DECLARE jsonData JSON;
     DECLARE v_series_id UUID;
+    -- DECLARE episodeTest JSON;
+    -- SET @episodeTest = NULL;
+    IF(@cacheSeasonsRefId = NEW.contentRefId) THEN
+        -- SET @episodeTest = JSON_OBJECT(
+        --     "message", "Episode added to season, updating season episode count"
+        -- );
+        BEGIN
+            -- Update episode count in Seasons table
+            UPDATE Seasons 
+                SET episodeCount = episodeCount + 1
+                WHERE contentId = NEW.contentRefId;
+            
+            UPDATE Series 
+                SET totalEpisodes = totalEpisodes + 1
+                WHERE contentId = @cacheSeriesRefId;
+        END;
+    ELSE 
+        -- SET @episodeTest = JSON_OBJECT(
+        --     "message", "Seasons does not match current SeasonsRefID"
+        -- );
+        SET @cacheSeasonsRefId := NEW.contentRefId;
+        UPDATE Seasons 
+            SET episodeCount = episodeCount + 1
+            WHERE contentId = NEW.contentRefId;
+        -- get the series ID from the cached season item
+        SELECT s.contentRefId INTO v_series_id
+            FROM Seasons s
+            WHERE s.contentId = NEW.contentRefId;
+        IF NOT (@cacheSeriesRefId = v_series_id) THEN
+            SET @cacheSeriesRefId := v_series_id;
+            -- SET @episodeTest = JSON_OBJECT(
+            --     "message", "Episode added to season, updating season and series episode count",
+            --     "seasons", "Seasons match series Ref ID",
+            --     "series", "Series match series Ref ID"
+            -- );
+        END IF;
+
+        UPDATE Series 
+            SET totalEpisodes = totalEpisodes + 1
+            WHERE contentId = v_series_id;
+    END IF;
     
-    -- Get the series ID from the season
-    SELECT s.contentRefId INTO v_series_id
-    FROM Seasons s
-    WHERE s.contentId = NEW.contentRefId;
+    -- UPDATE Seasons 
+    --     SET episodeCount = episodeCount + 1
+    --     WHERE contentId = NEW.contentRefId;
     
-    -- Update episode count in Seasons table
-    UPDATE Seasons 
-    SET episodeCount = episodeCount + 1
-    WHERE contentId = NEW.contentRefId;
-    
-    -- Update episode count in Series table
-    UPDATE Series
-    SET totalEpisodes = totalEpisodes + 1
-    WHERE contentId = v_series_id;
+    -- UPDATE Series
+    --     SET totalEpisodes = totalEpisodes + 1
+    --     WHERE contentId = v_series_id;
     
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
@@ -1665,6 +1718,8 @@ BEGIN
             END;
         ELSE 
             BEGIN
+                SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
+                SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
             END;
     END CASE; 
 
