@@ -681,7 +681,8 @@ BEGIN
 
         LogIt:BEGIN
             IF (JSON_LENGTH(JSON_KEYS(changed_json)) = 1 
-                AND JSON_EXTRACT(changed_json, '$.totalEpisodes') IS NOT NULL) THEN
+                AND (JSON_EXTRACT(changed_json, '$.totalEpisodes') IS NOT NULL 
+                OR JSON_EXTRACT(changed_json, '$.totalSeasons') IS NOT NULL)) THEN
                     LEAVE LogIt;
             END IF;
 
