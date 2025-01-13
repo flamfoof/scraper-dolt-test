@@ -858,7 +858,7 @@ BEGIN
     -- SET @episodeTest = NULL;
     IF(@cacheSeasonsRefId = NEW.contentRefId) THEN
         -- SET @episodeTest = JSON_OBJECT(
-        --     "message", "Episode added to season, updating season episode count"
+        --     "message", CONCAT("EpisodeRef Id Matched Season Id: ", @cacheSeasonsRefId)
         -- );
         BEGIN
             -- Update episode count in Seasons table
@@ -872,7 +872,7 @@ BEGIN
         END;
     ELSE 
         -- SET @episodeTest = JSON_OBJECT(
-        --     "message", "Seasons does not match current SeasonsRefID"
+        --     "message", CONCAT("Seasons does not match current SeasonsRefID: ", NEW.contentRefId)
         -- );
         SET @cacheSeasonsRefId := NEW.contentRefId;
         UPDATE Seasons 
@@ -882,11 +882,16 @@ BEGIN
         SELECT s.contentRefId INTO v_series_id
             FROM Seasons s
             WHERE s.contentId = NEW.contentRefId;
-        IF NOT (@cacheSeriesRefId = v_series_id) THEN
+
+        -- SET @episodeTest = JSON_OBJECT(
+        --     "message", CONCAT("SERIES does not match current SERIES ID: ", v_series_id)
+        -- );
+
+        IF (@cacheSeriesRefId != v_series_id OR @cacheSeriesRefId IS NULL) THEN
             SET @cacheSeriesRefId := v_series_id;
             -- SET @episodeTest = JSON_OBJECT(
-            --     "message", "Episode added to season, updating season and series episode count",
-            --     "seasons", "Seasons match series Ref ID",
+            --     "message", CONCAT("Updated Series Ref ID: ", @cacheSeriesRefId),
+            --     "seasons", CONCAT("Seasons match series Ref ID: ", @cacheSeasonsRefId),
             --     "series", "Series match series Ref ID"
             -- );
         END IF;
@@ -895,15 +900,7 @@ BEGIN
             SET totalEpisodes = totalEpisodes + 1
             WHERE contentId = v_series_id;
     END IF;
-    
-    -- UPDATE Seasons 
-    --     SET episodeCount = episodeCount + 1
-    --     WHERE contentId = NEW.contentRefId;
-    
-    -- UPDATE Series
-    --     SET totalEpisodes = totalEpisodes + 1
-    --     WHERE contentId = v_series_id;
-    
+
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
         'contentRefId', NEW.contentRefId,
@@ -1714,6 +1711,7 @@ BEGIN
                 UPDATE AuditLog 
                     SET action = 'destroyed'
                 WHERE contentRefId = p_contentRefId AND action = 'insert';
+                SET this_newData = NULL;
                 SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
             END;
         ELSE 
