@@ -271,7 +271,7 @@ CREATE OR REPLACE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     contentRefId UUID NOT NULL COMMENT 'Reference to the content being audited',
     tableName VARCHAR(64) NOT NULL,
-    action ENUM('create', 'insert', 'update', 'delete', 'restore', 'destroyed') NOT NULL,
+    action ENUM('create', 'update', 'delete', 'restore', 'destroyed') NOT NULL,
     username VARCHAR(64) NULL COMMENT 'Username of who made the change',
     appContext ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user') NOT NULL DEFAULT 'system',
     oldData JSON NULL,
@@ -501,7 +501,7 @@ BEGIN
     CALL LogAudit(
         'Movies', 
         NEW.contentId, 
-        'insert',
+        'create',
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -627,7 +627,7 @@ BEGIN
     CALL LogAudit(
         'Series',
         NEW.contentId,
-        'insert',
+        'create',
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -767,7 +767,7 @@ BEGIN
     CALL LogAudit(
         'Seasons', 
         NEW.contentId, 
-        'insert', 
+        'create', 
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -921,7 +921,7 @@ BEGIN
     CALL LogAudit(
         'Episodes',
         NEW.contentId,
-        'insert',
+        'create',
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -1089,7 +1089,7 @@ BEGIN
     CALL LogAudit(
         'MoviesDeeplinks', 
         NEW.contentId, 
-        'insert', 
+        'create', 
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -1267,7 +1267,7 @@ BEGIN
     CALL LogAudit(
         'SeriesDeeplinks', 
         NEW.contentId, 
-        'insert', 
+        'create', 
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -1400,7 +1400,7 @@ BEGIN
     CALL LogAudit(
         'MoviesPrices', 
         NEW.contentId, 
-        'insert',
+        'create',
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -1514,7 +1514,7 @@ BEGIN
     CALL LogAudit(
         'SeriesPrices', 
         NEW.contentId, 
-        'insert',
+        'create',
         NULL,
         jsonData,
         COALESCE(@username, 'system'),
@@ -1686,7 +1686,7 @@ DROP PROCEDURE IF EXISTS DropAllProcedures; //
 CREATE OR REPLACE PROCEDURE LogAudit(
     IN p_tableName VARCHAR(64) COLLATE utf8mb4_unicode_ci,
     IN p_contentRefId UUID,
-    IN p_actionType ENUM('insert', 'update', 'delete', 'restore', 'destroyed'),
+    IN p_actionType ENUM('create', 'update', 'delete', 'restore', 'destroyed'),
     IN p_oldData JSON,
     IN p_newData JSON,
     IN p_username VARCHAR(64),
@@ -1694,15 +1694,15 @@ CREATE OR REPLACE PROCEDURE LogAudit(
 )
 BEGIN
     DECLARE this_oldData, this_newData JSON;
-
+    
     SET @valid = TRUE;
     CASE 
-        WHEN p_actionType = 'insert' THEN
+        WHEN p_actionType = 'create' THEN
             BEGIN
                 SET @count = (
                     SELECT COUNT(*)
                     FROM AuditLog
-                    WHERE contentRefId = p_contentRefId AND action = 'insert'
+                    WHERE contentRefId = p_contentRefId AND action = 'create'
                 );
                 IF (@count > 0) THEN
                     SET @valid = FALSE;
@@ -1714,7 +1714,7 @@ BEGIN
             BEGIN
                 UPDATE AuditLog 
                     SET action = 'destroyed'
-                WHERE contentRefId = p_contentRefId AND action = 'insert';
+                WHERE contentRefId = p_contentRefId AND action = 'create';
                 SET this_newData = NULL;
                 SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
             END;
@@ -1780,7 +1780,7 @@ BEGIN
         CALL LogAudit(
             'Graveyard', 
             graveyardId, 
-            'insert',
+            'create',
             NULL,
             jsonData,
             COALESCE(@username, 'system'),
