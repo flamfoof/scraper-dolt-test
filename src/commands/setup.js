@@ -264,11 +264,13 @@ program
 			const schemaPath = join(process.cwd(), "src", "sql", "schema.sql");
 			const processQueuePath = join(process.cwd(), "src", "sql", "processQueue.sql");
 			const scraperPath = join(process.cwd(), "src", "sql", "scraper.sql");
+			const postWorkPath = join(process.cwd(), "src", "sql", "post_work.sql");
 			debug.log("Setup", `Reading schema files: ${schemaPath}, ${scraperPath}`);
 			let schema = await fs.readFile(dropPath, "utf8");
 			schema += await fs.readFile(schemaPath, "utf8");
 			schema += await fs.readFile(processQueuePath, "utf8");
 			schema += await fs.readFile(scraperPath, "utf8");
+			schema += await fs.readFile(postWorkPath, "utf8");
 			debug.log("Setup", `Schema files read, total size: ${schema.length} chars`);
 
 			// Parse and execute schema sections
