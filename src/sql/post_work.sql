@@ -173,3 +173,70 @@ BEGIN
         ), FALSE) 
         FROM SeriesPrices;
 END //
+
+CREATE OR REPLACE PROCEDURE LogAudit(
+    IN p_tableName VARCHAR(64) COLLATE utf8mb4_unicode_ci,
+    IN p_contentRefId UUID,
+    IN p_actionType ENUM('create', 'update', 'delete', 'restore', 'destroyed'),
+    IN p_oldData JSON,
+    IN p_newData JSON,
+    IN p_username VARCHAR(64),
+    IN p_context ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user')
+)
+BEGIN
+    DECLARE this_oldData, this_newData JSON;
+    
+    SET @valid = TRUE;
+    CASE 
+        WHEN p_actionType = 'create' THEN
+            BEGIN
+                SET @count = (
+                    SELECT COUNT(*)
+                    FROM AuditLog
+                    WHERE contentRefId = p_contentRefId AND action = 'create'
+                );
+                IF (@count > 0) THEN
+                    SET @valid = FALSE;
+                END IF;
+                SET this_oldData = NULL;
+                SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
+            END;
+        WHEN p_actionType = 'delete' THEN
+            BEGIN
+                UPDATE AuditLog 
+                    SET action = 'destroyed'
+                WHERE contentRefId = p_contentRefId AND action = 'create';
+                SET this_newData = NULL;
+                SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
+            END;
+        ELSE 
+            BEGIN
+                SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
+                SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
+            END;
+    END CASE; 
+
+    IF(@valid) THEN
+        INSERT INTO AuditLog (
+            id,
+            contentRefId,
+            tableName,
+            action,
+            username,
+            appContext,
+            oldData,
+            newData
+        ) VALUES (
+            UUID_v7(),
+            p_contentRefId,
+            p_tableName,
+            p_actionType,
+            IFNULL(p_username, 'system'),
+            IFNULL(p_context, 'system'),
+            this_oldData,
+            this_newData
+        );
+    END IF;
+END //
+
+
