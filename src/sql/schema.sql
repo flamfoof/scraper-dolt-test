@@ -495,6 +495,7 @@ BEGIN
         'backdropPath', NEW.backdropPath,
         'voteAverage', NEW.voteAverage,
         'voteCount', NEW.voteCount,
+        'region', NEW.region,
         'isActive', NEW.isActive
     ), true);
 
@@ -591,6 +592,7 @@ BEGIN
         'cast', OLD.cast,
         'crew', OLD.crew,
         'productionCompanies', OLD.productionCompanies,
+        'region', OLD.region,
         'isActive', OLD.isActive,
         'isDupe', OLD.isDupe
     ), true);
@@ -621,6 +623,7 @@ BEGIN
         'voteCount', NEW.voteCount,
         'totalSeasons', NEW.totalSeasons,
         'totalEpisodes', NEW.totalEpisodes,
+        'region', NEW.region,
         'isActive', NEW.isActive
     ), true);
 
@@ -737,6 +740,7 @@ BEGIN
         'networks', OLD.networks,
         'totalSeasons', OLD.totalSeasons,
         'totalEpisodes', OLD.totalEpisodes,
+        'region', OLD.region,
         'isActive', OLD.isActive
     ), true);
     
@@ -1213,23 +1217,23 @@ BEGIN
 
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
-            'contentRefId', NEW.contentRefId,
-            'title', NEW.title,
-            'sourceId', NEW.sourceId,
-            'sourceType', NEW.sourceType,
-            'originSource', NEW.originSource,
-            'region', NEW.region,
-            'web', NEW.web,
-            'android', NEW.android,
-            'iOS', NEW.iOS,
-            'androidTv', NEW.androidTv,
-            'fireTv', NEW.fireTv,
-            'lg', NEW.lg,
-            'samsung', NEW.samsung,
-            'tvOS', NEW.tvOS,
-            'roku', NEW.roku,
-            'isActive', NEW.isActive,
-            'tmdbId', NEW.tmdbId
+        'contentRefId', NEW.contentRefId,
+        'title', NEW.title,
+        'sourceId', NEW.sourceId,
+        'sourceType', NEW.sourceType,
+        'originSource', NEW.originSource,
+        'region', NEW.region,
+        'web', NEW.web,
+        'android', NEW.android,
+        'iOS', NEW.iOS,
+        'androidTv', NEW.androidTv,
+        'fireTv', NEW.fireTv,
+        'lg', NEW.lg,
+        'samsung', NEW.samsung,
+        'tvOS', NEW.tvOS,
+        'roku', NEW.roku,
+        'isActive', NEW.isActive,
+        'tmdbId', NEW.tmdbId
     ), true);
     
     -- If contentRefId exists, get data from Episodes table
