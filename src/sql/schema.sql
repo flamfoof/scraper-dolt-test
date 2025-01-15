@@ -40,6 +40,7 @@ CREATE OR REPLACE TABLE Movies (
     productionCompanies JSON NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     isDupe BOOLEAN DEFAULT false NOT NULL,
+    region VARCHAR(10) NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
@@ -72,6 +73,7 @@ CREATE OR REPLACE TABLE Series (
     networks JSON NULL,
     totalSeasons INT UNSIGNED DEFAULT 0 NULL,
     totalEpisodes INT UNSIGNED DEFAULT 0 NULL,
+    region VARCHAR(10) NULL,
     isActive BOOLEAN DEFAULT true NOT NULL,
     isDupe BOOLEAN DEFAULT false NOT NULL,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -1705,6 +1707,7 @@ BEGIN
                 IF (@count > 0) THEN
                     SET @valid = FALSE;
                 END IF;
+                SET this_oldData = NULL;
                 SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
             END;
         WHEN p_actionType = 'delete' THEN
