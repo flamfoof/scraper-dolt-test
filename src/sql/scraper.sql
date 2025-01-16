@@ -5,7 +5,7 @@ USE Scrapers;
 DELIMITER ;
 
 -- Scrapers Configuration
-CREATE TABLE Scrapers (
+CREATE OR REPLACE TABLE Scrapers (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     scraperId UUID NOT NULL COMMENT 'UUIDv5 format with <scraper>-<name>',
     adminRefId SMALLINT UNSIGNED NULL COMMENT 'Reference to <id> in Admin DB',
@@ -23,7 +23,7 @@ CREATE TABLE Scrapers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Scrapers Activity Log - optimized with UUIDv7
-CREATE TABLE ScrapersActivity (
+CREATE OR REPLACE TABLE ScrapersActivity (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     scraperRefId UUID NOT NULL COMMENT 'UUIDv5 format with <scraper>-<name>',
     runId UUID NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE ScrapersActivity (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Scrapers Log - optimized with UUIDv7
-CREATE TABLE ScraperLog (
+CREATE OR REPLACE TABLE ScraperLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     scraperRefId UUID NOT NULL COMMENT 'Reference to Scrapers.scraperId',
     runId UUID NOT NULL COMMENT 'Reference to ScrapersActivity.runId',
