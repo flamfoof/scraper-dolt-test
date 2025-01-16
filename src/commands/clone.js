@@ -16,7 +16,7 @@ const MBSize = 1024 * 1024;
 
 program
 	.name("clone")
-	.description("Clone databases from source to destination")
+	.description("Clone databases from source to destination\nIt's honestly much more faster performing a db dump and then importing it that way")
 	.option("-d, --database <n>", "Specific database to clone")
 	.option("--dry-run", "Show what would be cloned without actually cloning")
 	.option("--direction <direction>", "Clone direction: local or master", "local")
