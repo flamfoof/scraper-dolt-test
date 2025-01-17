@@ -185,6 +185,8 @@ CREATE OR REPLACE TABLE SeriesDeeplinks (
     altTitleId UUID NULL COMMENT 'UUIDv5 from altTitle',
     altTitle VARCHAR(255) NULL COMMENT 'If set, this will override the scrapers title, use it to match the TMDB title',
     releaseDate DATE NULL,
+    seasonNumber SMALLINT UNSIGNED DEFAULT 0 NULL,
+    episodeNumber SMALLINT UNSIGNED DEFAULT 0 NULL,
     altReleaseDate DATE NULL COMMENT 'If set, this will override the scrapers release date, use it to match the TMDB title',
     originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
