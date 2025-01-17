@@ -136,6 +136,15 @@ The setup command supports the following options:
 - `--reset`: Reset the database (WARNING: deletes all data)
 - `--debug`: Enable debug logging
 
+
+NOTE: The post_work.sql script should be called AFTER the setup script and 
+  AFTER the TmdbExtractionToDB script is called the following code should look like
+
+```bash
+  # the port should be 3306 or 3307
+  mariadb -h localhost -u test -p pass -P3306 -v Tmdb < ./src/sql/post_work.sql
+```
+
 ### Server Management
 
 The application provides different ways to connect to the database:
