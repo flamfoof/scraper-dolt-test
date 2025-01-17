@@ -24,6 +24,7 @@ CREATE OR REPLACE TABLE Movies (
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NOT NULL,
+    altTitleId UUID NULL COMMENT 'UUIDv5 from altTitle',
     altTitle VARCHAR(255) NULL,
     description TEXT NULL,
     runtime INT UNSIGNED NULL COMMENT 'Runtime in minutes',
@@ -57,6 +58,7 @@ CREATE OR REPLACE TABLE Series (
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NOT NULL,
+    altTitleId UUID NULL COMMENT 'UUIDv5 from altTitle',
     altTitle VARCHAR(255) NULL,
     description TEXT NULL,
     releaseDate DATE NULL,
@@ -117,6 +119,7 @@ CREATE OR REPLACE TABLE Episodes (
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title TEXT NOT NULL,
+    altTitleId UUID NULL COMMENT 'UUIDv5 from altTitle',
     altTitle TEXT NULL,
     description TEXT NULL,
     episodeNumber SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
@@ -1703,59 +1706,59 @@ CREATE OR REPLACE PROCEDURE LogAudit(
     IN p_context ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user')
 )
 BEGIN
-    DECLARE this_oldData, this_newData JSON;
+    -- DECLARE this_oldData, this_newData JSON;
     
-    SET @valid = TRUE;
-    CASE 
-        WHEN p_actionType = 'create' THEN
-            BEGIN
-                SET @count = (
-                    SELECT COUNT(*)
-                    FROM AuditLog
-                    WHERE contentRefId = p_contentRefId AND action = 'create'
-                );
-                IF (@count > 0) THEN
-                    SET @valid = FALSE;
-                END IF;
-                SET this_oldData = NULL;
-                SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
-            END;
-        WHEN p_actionType = 'delete' THEN
-            BEGIN
-                UPDATE AuditLog 
-                    SET action = 'destroyed'
-                WHERE contentRefId = p_contentRefId AND action = 'create';
-                SET this_newData = NULL;
-                SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
-            END;
-        ELSE 
-            BEGIN
-                SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
-                SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
-            END;
-    END CASE; 
+    -- SET @valid = TRUE;
+    -- CASE 
+    --     WHEN p_actionType = 'create' THEN
+    --         BEGIN
+    --             SET @count = (
+    --                 SELECT COUNT(*)
+    --                 FROM AuditLog
+    --                 WHERE contentRefId = p_contentRefId AND action = 'create'
+    --             );
+    --             IF (@count > 0) THEN
+    --                 SET @valid = FALSE;
+    --             END IF;
+    --             SET this_oldData = NULL;
+    --             SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
+    --         END;
+    --     WHEN p_actionType = 'delete' THEN
+    --         BEGIN
+    --             UPDATE AuditLog 
+    --                 SET action = 'destroyed'
+    --             WHERE contentRefId = p_contentRefId AND action = 'create';
+    --             SET this_newData = NULL;
+    --             SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
+    --         END;
+    --     ELSE 
+    --         BEGIN
+    --             SET this_newData = getChangedFieldsJSON(JSON_OBJECT(), p_newData);
+    --             SET this_oldData = getChangedFieldsJSON(JSON_OBJECT(), p_oldData);
+    --         END;
+    -- END CASE; 
 
-    IF(@valid) THEN
-        INSERT INTO AuditLog (
-            id,
-            contentRefId,
-            tableName,
-            action,
-            username,
-            appContext,
-            oldData,
-            newData
-        ) VALUES (
-            UUID_v7(),
-            p_contentRefId,
-            p_tableName,
-            p_actionType,
-            IFNULL(p_username, 'system'),
-            IFNULL(p_context, 'system'),
-            this_oldData,
-            this_newData
-        );
-    END IF;
+    -- IF(@valid) THEN
+    --     INSERT INTO AuditLog (
+    --         id,
+    --         contentRefId,
+    --         tableName,
+    --         action,
+    --         username,
+    --         appContext,
+    --         oldData,
+    --         newData
+    --     ) VALUES (
+    --         UUID_v7(),
+    --         p_contentRefId,
+    --         p_tableName,
+    --         p_actionType,
+    --         IFNULL(p_username, 'system'),
+    --         IFNULL(p_context, 'system'),
+    --         this_oldData,
+    --         this_newData
+    --     );
+    -- END IF;
 END //
 
 CREATE OR REPLACE PROCEDURE CreateGraveyardItem(
