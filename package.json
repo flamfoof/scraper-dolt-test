@@ -13,6 +13,7 @@
     "setup:sample": "bun run src/commands/setup.js --sample-data 1000",
     "setup:master": "bun run src/commands/setup.js --connection master",
     "setup:local": "bun run src/commands/setup.js --connection local",
+    "setupPost": "bun run src/commands/setupPost.js",
     "clone": "bun run src/commands/clone.js",
     "cloneDiff": "bun run src/commands/cloneDiff.js",
     "test": "bun test"
