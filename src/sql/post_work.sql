@@ -239,4 +239,4 @@ BEGIN
     END IF;
 END //
 
-
+CALL InitializeAuditLog(); //
