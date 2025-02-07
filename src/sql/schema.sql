@@ -1852,7 +1852,7 @@ BEGIN
         'Movies',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', COALESCE(@username, 'system')),
         jsonData
     );
 
@@ -1878,7 +1878,7 @@ BEGIN
         'Series',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', COALESCE(@username, 'system')),
         jsonData
     );
 
@@ -1906,7 +1906,7 @@ BEGIN
         'Seasons',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', COALESCE(@username, 'system')),
         jsonData
     );
 
@@ -1934,7 +1934,7 @@ BEGIN
         'Episodes',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', COALESCE(@username, 'system')),
         jsonData
     );
     
@@ -1959,9 +1959,11 @@ BEGIN
     DELETE FROM MoviesPrices WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     IF USER() LIKE '%event_scheduler%' THEN
-        SET audit_username = 'Scheduler';
+        SET audit_username = 'scheduler';
+    ELSEIF USER() NOT LIKE 'root%' THEN
+        SET audit_username = @username;
     ELSE
-        SET audit_username = USER();
+        SET audit_username = 'system';
     END IF;
 
     CALL CreateGraveyardItem(
@@ -1979,7 +1981,7 @@ BEGIN
         'delete',
         jsonData,
         NULL,
-        COALESCE(@username, 'system'),
+        audit_username,
         COALESCE(@appContext, 'system')
     );
 END //
@@ -1994,9 +1996,11 @@ BEGIN
     DELETE FROM SeriesPrices WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
 
     IF USER() LIKE '%event_scheduler%' THEN
-        SET audit_username = 'Scheduler';
+        SET audit_username = 'scheduler';
+    ELSEIF USER() NOT LIKE 'root%' THEN
+        SET audit_username = @username;
     ELSE
-        SET audit_username = USER();
+        SET audit_username = 'system';
     END IF;
 
     CALL CreateGraveyardItem(
@@ -2014,7 +2018,7 @@ BEGIN
         'delete',
         jsonData,
         NULL,
-        COALESCE(@username, 'system'),
+        audit_username,
         COALESCE(@appContext, 'system')
     );
 END //
@@ -2027,7 +2031,7 @@ BEGIN
         'MoviesPrices',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', COALESCE(@username, 'system')),
         jsonData
     );
 
@@ -2051,7 +2055,7 @@ BEGIN
         'SeriesPrices',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', COALESCE(@username, 'system')),
         jsonData
     );
 
@@ -2118,93 +2122,6 @@ BEGIN
     UPDATE Series
     SET totalEpisodes = totalEpisodes - 1
     WHERE contentId = JSON_VALUE(jsonData, '$.seasonContentRefId');
-END //
-
-CREATE OR REPLACE EVENT RemoveExpiredMoviesDeeplinks
--- ON SCHEDULE EVERY 30 MINUTE
--- STARTS NOW() + INTERVAL (30 - (MINUTE(NOW()) MOD 30)) MINUTE
-ON SCHEDULE EVERY 10 SECOND
-STARTS NOW() + INTERVAL 20 SECOND
-DO
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE moviesContentId UUID;
-    DECLARE moviesExpireAt TIMESTAMP;
-
-    DECLARE cur CURSOR FOR
-        SELECT contentId, expireAt
-        FROM MoviesDeeplinks
-        WHERE expireAt <= NOW();
-
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-
-    OPEN cur;
-
-    read_loop: LOOP
-        FETCH cur INTO moviesContentId, moviesExpireAt;
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-
-        -- Create graveyard item for the expired movie deeplink
-        CALL CreateGraveyardItem(
-            'MoviesDeeplinks',
-            'Tmdb',
-            'expired',
-            'Expired',
-            JSON_OBJECT('contentId', moviesContentId, 'expireAt', moviesExpireAt)
-        );
-    END LOOP;
-
-    CLOSE cur;
-
-    -- Delete expired movie deeplinks
-    DELETE FROM MoviesDeeplinks
-    WHERE expireAt <= NOW();
-END //
-
-CREATE OR REPLACE EVENT RemoveExpiredSeriesDeeplinks
-ON SCHEDULE EVERY 30 MINUTE
-STARTS NOW() + INTERVAL (30 - (MINUTE(NOW()) MOD 30)) MINUTE
--- Test expiration scheduler by changing below
--- ON SCHEDULE EVERY 10 SECOND
--- STARTS NOW() + INTERVAL 20 SECOND
-DO
-BEGIN
-    DECLARE done INT DEFAULT FALSE;
-    DECLARE seriesContentId UUID;
-    DECLARE seriesExpireAt TIMESTAMP;
-
-    DECLARE cur CURSOR FOR
-        SELECT contentId, expireAt
-        FROM SeriesDeeplinks
-        WHERE expireAt <= NOW();
-
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-
-    OPEN cur;
-
-    read_loop: LOOP
-        FETCH cur INTO seriesContentId, seriesExpireAt;
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-
-        -- Create graveyard item for the expired series deeplink
-        CALL CreateGraveyardItem(
-            'SeriesDeeplinks',
-            'Tmdb',
-            'expired',
-            'Expired',
-            JSON_OBJECT('contentId', seriesContentId, 'expireAt', seriesExpireAt)
-        );
-    END LOOP;
-
-    CLOSE cur;
-
-    -- Delete expired series deeplinks
-    DELETE FROM SeriesDeeplinks
-    WHERE expireAt <= NOW();
 END //
 
 DELIMITER ;
