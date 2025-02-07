@@ -1954,14 +1954,21 @@ CREATE OR REPLACE PROCEDURE MoviesDeeplinksDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
+    DECLARE audit_username VARCHAR(64);
     -- Delete all related
     DELETE FROM MoviesPrices WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
+
+    IF USER() LIKE '%event_scheduler%' THEN
+        SET audit_username = 'Scheduler';
+    ELSE
+        SET audit_username = USER();
+    END IF;
 
     CALL CreateGraveyardItem(
         'MoviesDeeplinks',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', audit_username),
         jsonData
     );
 
@@ -1981,14 +1988,22 @@ CREATE OR REPLACE PROCEDURE SeriesDeeplinksDeleteAudit(
     IN jsonData JSON
 )
 BEGIN
+    DECLARE audit_username VARCHAR(64);
+
     -- Delete all related
     DELETE FROM SeriesPrices WHERE contentRefId = JSON_VALUE(jsonData, '$.contentId');
+
+    IF USER() LIKE '%event_scheduler%' THEN
+        SET audit_username = 'Scheduler';
+    ELSE
+        SET audit_username = USER();
+    END IF;
 
     CALL CreateGraveyardItem(
         'SeriesDeeplinks',
         'Tmdb',
         'deleted',
-        'Deleted by user',
+        CONCAT('Deleted by: ', audit_username),
         jsonData
     );
 
@@ -2103,6 +2118,93 @@ BEGIN
     UPDATE Series
     SET totalEpisodes = totalEpisodes - 1
     WHERE contentId = JSON_VALUE(jsonData, '$.seasonContentRefId');
+END //
+
+CREATE OR REPLACE EVENT RemoveExpiredMoviesDeeplinks
+-- ON SCHEDULE EVERY 30 MINUTE
+-- STARTS NOW() + INTERVAL (30 - (MINUTE(NOW()) MOD 30)) MINUTE
+ON SCHEDULE EVERY 10 SECOND
+STARTS NOW() + INTERVAL 20 SECOND
+DO
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE moviesContentId UUID;
+    DECLARE moviesExpireAt TIMESTAMP;
+
+    DECLARE cur CURSOR FOR
+        SELECT contentId, expireAt
+        FROM MoviesDeeplinks
+        WHERE expireAt <= NOW();
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+
+    read_loop: LOOP
+        FETCH cur INTO moviesContentId, moviesExpireAt;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+
+        -- Create graveyard item for the expired movie deeplink
+        CALL CreateGraveyardItem(
+            'MoviesDeeplinks',
+            'Tmdb',
+            'expired',
+            'Expired',
+            JSON_OBJECT('contentId', moviesContentId, 'expireAt', moviesExpireAt)
+        );
+    END LOOP;
+
+    CLOSE cur;
+
+    -- Delete expired movie deeplinks
+    DELETE FROM MoviesDeeplinks
+    WHERE expireAt <= NOW();
+END //
+
+CREATE OR REPLACE EVENT RemoveExpiredSeriesDeeplinks
+ON SCHEDULE EVERY 30 MINUTE
+STARTS NOW() + INTERVAL (30 - (MINUTE(NOW()) MOD 30)) MINUTE
+-- Test expiration scheduler by changing below
+-- ON SCHEDULE EVERY 10 SECOND
+-- STARTS NOW() + INTERVAL 20 SECOND
+DO
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE seriesContentId UUID;
+    DECLARE seriesExpireAt TIMESTAMP;
+
+    DECLARE cur CURSOR FOR
+        SELECT contentId, expireAt
+        FROM SeriesDeeplinks
+        WHERE expireAt <= NOW();
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+
+    read_loop: LOOP
+        FETCH cur INTO seriesContentId, seriesExpireAt;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+
+        -- Create graveyard item for the expired series deeplink
+        CALL CreateGraveyardItem(
+            'SeriesDeeplinks',
+            'Tmdb',
+            'expired',
+            'Expired',
+            JSON_OBJECT('contentId', seriesContentId, 'expireAt', seriesExpireAt)
+        );
+    END LOOP;
+
+    CLOSE cur;
+
+    -- Delete expired series deeplinks
+    DELETE FROM SeriesDeeplinks
+    WHERE expireAt <= NOW();
 END //
 
 DELIMITER ;
