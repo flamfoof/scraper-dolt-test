@@ -494,15 +494,15 @@ BEGIN
     SET deeplink_id1 = UUID_v7();
     SET deeplink_id2 = UUID_v7();
 
-    INSERT INTO MoviesDeeplinks (contentId, contentRefId, sourceId, sourceType, title)
+    INSERT INTO MoviesDeeplinks (contentId, contentRefId, sourceId, sourceType, title, expireAt)
     VALUES 
-        (deeplink_id1, content_id1, 1, 'netflix', 'Netflix Link 1'),
-        (deeplink_id2, content_id2, 1, 'netflix', 'Netflix Link 2');
+        (deeplink_id1, content_id1, 1, 'netflix', 'Netflix Link 1', NOW() + INTERVAL 5 SECOND),
+        (deeplink_id2, content_id2, 1, 'netflix', 'Netflix Link 2', NOW() + INTERVAL 5 SECOND);
     
-    INSERT INTO SeriesDeeplinks (contentId, contentRefId, sourceId, sourceType, title)
+    INSERT INTO SeriesDeeplinks (contentId, contentRefId, sourceId, sourceType, title, expireAt)
     VALUES 
-        (deeplink_id1, episode_id1, 1, 'netflix', 'Netflix Link 1'),
-        (deeplink_id2, episode_id2, 1, 'netflix', 'Netflix Link 2');
+        (deeplink_id1, episode_id1, 1, 'netflix', 'Netflix Link 1', NOW() + INTERVAL 5 SECOND),
+        (deeplink_id2, episode_id2, 1, 'netflix', 'Netflix Link 2', NOW() + INTERVAL 5 SECOND);
     
     -- Delete one series (should cascade to its season, episode, and deeplink)
     DELETE FROM Series WHERE contentId = content_id1;

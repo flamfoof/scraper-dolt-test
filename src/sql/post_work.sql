@@ -177,7 +177,7 @@ END //
 CREATE OR REPLACE PROCEDURE LogAudit(
     IN p_tableName VARCHAR(64) COLLATE utf8mb4_unicode_ci,
     IN p_contentRefId UUID,
-    IN p_actionType ENUM('create', 'update', 'delete', 'restore', 'destroyed'),
+    IN p_actionType ENUM('create', 'update', 'delete', 'restore', 'destroyed', 'expired'),
     IN p_oldData JSON,
     IN p_newData JSON,
     IN p_username VARCHAR(64),

@@ -282,7 +282,7 @@ CREATE OR REPLACE TABLE AuditLog (
     id UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     contentRefId UUID NOT NULL COMMENT 'Reference to the content being audited',
     tableName VARCHAR(64) NOT NULL,
-    action ENUM('create', 'update', 'delete', 'restore', 'destroyed') NOT NULL,
+    action ENUM('create', 'update', 'delete', 'restore', 'destroyed', 'expired') NOT NULL,
     username VARCHAR(64) NULL COMMENT 'Username of who made the change',
     appContext ENUM('scraper', 'admin', 'api', 'system', 'manual', 'user') NOT NULL DEFAULT 'system',
     oldData JSON NULL,
@@ -315,7 +315,7 @@ CREATE OR REPLACE TABLE Graveyard (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv7 format includes timestamp',
     contentRefId UUID NULL COMMENT 'Reference to the original content ID if available',
-    reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other', 'resolved') NOT NULL,
+    reason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other', 'resolved', 'expired') NOT NULL,
     contentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices') NOT NULL,
     sourceId VARCHAR(128) NULL COMMENT 'External ID from the source (e.g., TMDB ID, IMDB ID)',
     sourceType VARCHAR(64) NULL COMMENT 'Source of the content (e.g., tmdb, imdb, reelgood)',
@@ -758,8 +758,6 @@ BEGIN
     CALL SeriesDeleteAudit(jsonData);
 END //
 
-
-
 -- Seasons triggers
 CREATE OR REPLACE TRIGGER Seasons_Insert_Audit
 AFTER INSERT ON Seasons
@@ -1023,7 +1021,7 @@ BEGIN
         'voteCount', OLD.voteCount,
         'isActive', OLD.isActive
     ), true);
-    
+
     CALL EpisodesDeleteAudit(jsonData);
 END //
 
@@ -1701,7 +1699,7 @@ DROP PROCEDURE IF EXISTS DropAllProcedures; //
 CREATE OR REPLACE PROCEDURE LogAudit(
     IN p_tableName VARCHAR(64) COLLATE utf8mb4_unicode_ci,
     IN p_contentRefId UUID,
-    IN p_actionType ENUM('create', 'update', 'delete', 'restore', 'destroyed'),
+    IN p_actionType ENUM('create', 'update', 'delete', 'restore', 'destroyed', 'expired'),
     IN p_oldData JSON,
     IN p_newData JSON,
     IN p_username VARCHAR(64),
@@ -1766,7 +1764,7 @@ END //
 CREATE OR REPLACE PROCEDURE CreateGraveyardItem(
     dataContentType ENUM('Movies', 'Series', 'Seasons', 'Episodes', 'MoviesDeeplinks', 'SeriesDeeplinks', 'MoviesPrices', 'SeriesPrices'),
     dataSourceType TEXT,
-    dataReason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other', 'resolved'),
+    dataReason ENUM('duplicate', 'invalid_data', 'missing_required', 'api_error', 'parsing_error', 'deleted', 'other', 'resolved', 'expired'),
     dataDetails TEXT,
     jsonData JSON
 )
