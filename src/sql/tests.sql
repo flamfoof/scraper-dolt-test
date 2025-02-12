@@ -462,14 +462,14 @@ BEGIN
     SET content_id2 = UUID_v7();
     
     -- Insert two test series
-    INSERT INTO Movies (contentId, title, isActive)
+    INSERT INTO Movies (contentId, tmdbId, title, isActive)
     VALUES 
-        (content_id1, 'Test Movie 1', true),
-        (content_id2, 'Test Movie 2', true);
-    INSERT INTO Series (contentId, title, isActive)
+        (content_id1, 12342, 'Test Movie 1', true),
+        (content_id2, 12343, 'Test Movie 2', true);
+    INSERT INTO Series (contentId, tmdbId, title, isActive)
     VALUES 
-        (content_id1, 'Test Series 1', true),
-        (content_id2, 'Test Series 2', true);
+        (content_id1, 12342, 'Test Series 1', true),
+        (content_id2, 12343, 'Test Series 2', true);
 
     
     -- Insert seasons

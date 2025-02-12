@@ -19,7 +19,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE OR REPLACE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
-    tmdbId VARCHAR(20) NULL,
+    tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
@@ -53,7 +53,7 @@ CREATE OR REPLACE TABLE Movies (
 CREATE OR REPLACE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
-    tmdbId VARCHAR(20) NULL,
+    tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
