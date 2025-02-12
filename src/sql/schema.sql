@@ -114,7 +114,7 @@ CREATE OR REPLACE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL,
     contentRefId UUID NOT NULL COMMENT 'Reference to Seasons.contentId',
-    tmdbId VARCHAR(20) NULL,
+    tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',

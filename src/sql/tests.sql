@@ -485,10 +485,10 @@ BEGIN
     SET episode_id1 = UUID_v7();
     SET episode_id2 = UUID_v7();
     
-    INSERT INTO Episodes (contentId, contentRefId, title, episodeNumber)
+    INSERT INTO Episodes (contentId, contentRefId, tmdbId, title, episodeNumber)
     VALUES 
-        (episode_id1, season_id1, 'Episode 1 of Season 1 Series 1', 1),
-        (episode_id2, season_id2, 'Episode 1 of Season 1 Series 2', 1);
+        (episode_id1, season_id1, 12342, 'Episode 1 of Season 1 Series 1', 1),
+        (episode_id2, season_id2, 12343, 'Episode 1 of Season 1 Series 2', 1);
     
     -- Insert deeplinks
     SET deeplink_id1 = UUID_v7();
