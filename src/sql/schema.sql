@@ -88,7 +88,7 @@ CREATE OR REPLACE TABLE Series (
 -- Seasons table
 CREATE OR REPLACE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
+    contentId UUID NOT NULL COMMENT 'Reference to seasons-<Series.tmdbId>-<seasonNumber>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Series.contentId',
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NULL,
@@ -112,8 +112,8 @@ CREATE OR REPLACE TABLE Seasons (
 -- Episodes table
 CREATE OR REPLACE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL,
-    contentRefId UUID NOT NULL COMMENT 'Reference to Seasons.contentId',
+    contentId UUID NOT NULL COMMENT 'Reference to episode-<Episodes.tmdbId>-<seasonNumber>-<episodeNumber>',
+    contentRefId UUID NOT NULL COMMENT 'Reference to <Seasons.contentId>',
     tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -179,7 +179,7 @@ CREATE OR REPLACE TABLE MoviesDeeplinks (
 -- Episode Deeplinks table for storing platform-specific episode links
 CREATE OR REPLACE TABLE SeriesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
-    contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
+    contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<contentRefId>-<season>-<episode>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
@@ -212,7 +212,7 @@ CREATE OR REPLACE TABLE SeriesDeeplinks (
     isActive BOOLEAN DEFAULT true NOT NULL,
     CONSTRAINT PRIMARY KEY (id),
     CONSTRAINT SeriesDeeplinksContent_UK UNIQUE KEY (contentId),
-    CONSTRAINT SeriesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource),
+    CONSTRAINT SeriesDeeplinksContentSource_UK UNIQUE KEY (contentRefId, sourceId, originSource, seasonNumber, episodeNumber),
     CONSTRAINT SeriesDeeplinksContentRef_FK FOREIGN KEY (contentRefId)
         REFERENCES Episodes(contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
