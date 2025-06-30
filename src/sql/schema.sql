@@ -525,6 +525,13 @@ BEGIN
     );
 END //
 
+CREATE OR REPLACE TRIGGER Movies_Update_UpdatedAt
+BEFORE UPDATE ON Movies
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
+END //
+
 CREATE OR REPLACE TRIGGER Movies_Update_Audit
 AFTER UPDATE ON Movies
 FOR EACH ROW
@@ -651,6 +658,13 @@ BEGIN
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
+END //
+
+CREATE OR REPLACE TRIGGER Series_Update_UpdatedAt
+BEFORE UPDATE ON Series
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
 END //
 
 CREATE OR REPLACE TRIGGER Series_Update_Audit
@@ -790,6 +804,13 @@ BEGIN
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
+END //
+
+CREATE OR REPLACE TRIGGER Seasons_Update_UpdatedAt
+BEFORE UPDATE ON Seasons
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
 END //
 
 CREATE OR REPLACE TRIGGER Seasons_Update_Audit
@@ -944,6 +965,13 @@ BEGIN
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
+END //
+
+CREATE OR REPLACE TRIGGER Episodes_Update_UpdatedAt
+BEFORE UPDATE ON Episodes
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
 END //
 
 CREATE OR REPLACE TRIGGER Episodes_Update_Audit
@@ -1112,6 +1140,13 @@ BEGIN
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
+END //
+
+CREATE OR REPLACE TRIGGER MoviesDeeplinks_Update_UpdatedAt
+BEFORE UPDATE ON MoviesDeeplinks
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
 END //
 
 CREATE OR REPLACE TRIGGER MoviesDeeplinks_Update_Audit
@@ -1307,6 +1342,13 @@ BEGIN
     );
 END //
 
+CREATE OR REPLACE TRIGGER SeriesDeeplinks_Update_UpdatedAt
+BEFORE UPDATE ON SeriesDeeplinks
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
+END //
+
 CREATE OR REPLACE TRIGGER SeriesDeeplinks_Update_Audit
 AFTER UPDATE ON SeriesDeeplinks
 FOR EACH ROW
@@ -1453,6 +1495,13 @@ BEGIN
     );
 END //
 
+CREATE OR REPLACE TRIGGER MoviesPrices_Update_UpdatedAt
+BEFORE UPDATE ON MoviesPrices
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
+END //
+
 CREATE OR REPLACE TRIGGER MoviesPrices_Update_Audit
 AFTER UPDATE ON MoviesPrices
 FOR EACH ROW
@@ -1565,6 +1614,13 @@ BEGIN
         COALESCE(@username, 'system'),
         COALESCE(@appContext, 'system')
     );
+END //
+
+CREATE OR REPLACE TRIGGER SeriesPrices_Update_UpdatedAt
+BEFORE UPDATE ON SeriesPrices
+FOR EACH ROW
+BEGIN
+    SET NEW.updatedAt = NOW();
 END //
 
 CREATE OR REPLACE TRIGGER SeriesPrices_Update_Audit
