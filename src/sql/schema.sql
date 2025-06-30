@@ -138,12 +138,13 @@ CREATE OR REPLACE TABLE Episodes (
     CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
         REFERENCES Seasons(contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+4
 -- Movie Deeplinks table for storing platform-specific movie links
 CREATE OR REPLACE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
+    priceRefId UUID NULL COMMENT 'Reference to MoviesPrices.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
@@ -153,7 +154,7 @@ CREATE OR REPLACE TABLE MoviesDeeplinks (
     altTitle VARCHAR(255) NULL COMMENT 'If set, this will override the scrapers title, use it to match the TMDB title',
     releaseDate DATE NULL,
     altReleaseDate DATE NULL COMMENT 'If set, this will override the scrapers release date, use it to match the TMDB title',
-    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
+    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb', 'simply') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     -- Platform specific links
     web TEXT NULL COMMENT 'Web browser URL',
@@ -181,6 +182,7 @@ CREATE OR REPLACE TABLE SeriesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<contentRefId>-<season>-<episode>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
+    priceRefId UUID NULL COMMENT 'Reference to EpisodesPrices.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
     sourceType VARCHAR(64) NOT NULL,
@@ -194,7 +196,7 @@ CREATE OR REPLACE TABLE SeriesDeeplinks (
     altSeasonNumber SMALLINT UNSIGNED NULL COMMENT 'If set, this will override the scrapers season number, use it to match the TMDB title',
     episodeNumber SMALLINT UNSIGNED DEFAULT 0 NULL,
     altEpisodeNumber SMALLINT UNSIGNED NULL COMMENT 'If set, this will override the scrapers episode number, use it to match the TMDB title',
-    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb') DEFAULT 'none' NOT NULL,
+    originSource ENUM ('none', 'freecast', 'gracenote', 'reelgood', 'tmdb', 'simply') DEFAULT 'none' NOT NULL,
     region VARCHAR(10) NULL,
     -- Platform specific links
     web TEXT NULL COMMENT 'Web browser URL',
@@ -1197,6 +1199,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'priceRefId', OLD.priceRefId,
         'tmdbId', OLD.tmdbId,
         'title', OLD.title,
         'altTitle', OLD.altTitle,
@@ -1392,6 +1395,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'priceRefId', OLD.priceRefId,
         'tmdbId', OLD.tmdbId,
         'title', OLD.title,
         'altReleaseDate', OLD.altReleaseDate,
