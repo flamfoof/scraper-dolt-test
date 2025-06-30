@@ -19,6 +19,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE OR REPLACE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
+    adminRefId INT UNSIGNED NULL,
     tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -53,6 +54,7 @@ CREATE OR REPLACE TABLE Movies (
 CREATE OR REPLACE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
+    adminRefId INT UNSIGNED NULL,
     tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -90,6 +92,7 @@ CREATE OR REPLACE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to seasons-<Series.tmdbId>-<seasonNumber>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Series.contentId',
+    adminRefId INT UNSIGNED NULL,
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NULL,
     description TEXT NULL,
@@ -114,6 +117,7 @@ CREATE OR REPLACE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to episode-<Episodes.tmdbId>-<seasonNumber>-<episodeNumber>',
     contentRefId UUID NOT NULL COMMENT 'Reference to <Seasons.contentId>',
+    adminRefId INT UNSIGNED NULL,
     tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -144,6 +148,7 @@ CREATE OR REPLACE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
+    adminRefId INT UNSIGNED NULL,
     priceRefId UUID NULL COMMENT 'Reference to MoviesPrices.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
@@ -182,6 +187,7 @@ CREATE OR REPLACE TABLE SeriesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<contentRefId>-<season>-<episode>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
+    adminRefId INT UNSIGNED NULL,
     priceRefId UUID NULL COMMENT 'Reference to EpisodesPrices.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
@@ -224,6 +230,7 @@ CREATE OR REPLACE TABLE MoviesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
     contentRefId UUID NOT NULL COMMENT 'Reference to MoviesDeeplinks.contentId',
+    adminRefId INT UNSIGNED NULL,
     region VARCHAR(10) NULL,
     -- Buy prices of movies
     buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of movies',
@@ -247,6 +254,7 @@ CREATE OR REPLACE TABLE SeriesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
     contentRefId UUID NOT NULL COMMENT 'Reference to SeriesDeeplinks.contentId',
+    adminRefId INT UNSIGNED NULL,
     region VARCHAR(10) NULL,
     -- Buy prices of episodes
     buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of episodes',
