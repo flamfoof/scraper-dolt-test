@@ -19,7 +19,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE OR REPLACE TABLE Movies (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -54,7 +54,7 @@ CREATE OR REPLACE TABLE Movies (
 CREATE OR REPLACE TABLE Series (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -92,7 +92,7 @@ CREATE OR REPLACE TABLE Seasons (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to seasons-<Series.tmdbId>-<seasonNumber>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Series.contentId',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     titleId UUID NULL COMMENT 'UUIDv5 from title',
     title VARCHAR(255) NULL,
     description TEXT NULL,
@@ -117,7 +117,7 @@ CREATE OR REPLACE TABLE Episodes (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'Reference to episode-<Episodes.tmdbId>-<seasonNumber>-<episodeNumber>',
     contentRefId UUID NOT NULL COMMENT 'Reference to <Seasons.contentId>',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     tmdbId VARCHAR(20) NOT NULL,
     imdbId VARCHAR(20) NULL,
     rgId VARCHAR(128) NULL,
@@ -142,13 +142,13 @@ CREATE OR REPLACE TABLE Episodes (
     CONSTRAINT EpisodesSeason_FK FOREIGN KEY (contentRefId)
         REFERENCES Seasons(contentId) ON DELETE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-4
+
 -- Movie Deeplinks table for storing platform-specific movie links
 CREATE OR REPLACE TABLE MoviesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<tmdbId>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Movies.contentId',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     priceRefId UUID NULL COMMENT 'Reference to MoviesPrices.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
@@ -187,7 +187,7 @@ CREATE OR REPLACE TABLE SeriesDeeplinks (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDv5 format with <content>-<contentRefId>-<season>-<episode>',
     contentRefId UUID NOT NULL COMMENT 'Reference to Episodes.contentId',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     priceRefId UUID NULL COMMENT 'Reference to EpisodesPrices.contentId',
     tmdbId VARCHAR(20) NULL,
     sourceId SMALLINT UNSIGNED NOT NULL,
@@ -230,7 +230,7 @@ CREATE OR REPLACE TABLE MoviesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
     contentRefId UUID NOT NULL COMMENT 'Reference to MoviesDeeplinks.contentId',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     region VARCHAR(10) NULL,
     -- Buy prices of movies
     buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of movies',
@@ -254,7 +254,7 @@ CREATE OR REPLACE TABLE SeriesPrices (
     id INT UNSIGNED AUTO_INCREMENT NOT NULL,
     contentId UUID NOT NULL COMMENT 'UUIDV5 format with <content>-<deeplinkSource>-<tmdbId>',
     contentRefId UUID NOT NULL COMMENT 'Reference to SeriesDeeplinks.contentId',
-    adminRefId INT UNSIGNED NULL,
+    adminRefId INT UNSIGNED NULL COMMENT 'Reference to Admin Database ID',
     region VARCHAR(10) NULL,
     -- Buy prices of episodes
     buySD DECIMAL(10,2) NULL COMMENT 'SD quality purchase price of episodes',
@@ -604,6 +604,7 @@ BEGIN
     DECLARE jsonData JSON;
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
+        'adminRefId', OLD.adminRefId,
         'tmdbId', OLD.tmdbId,
         'imdbId', OLD.imdbId,
         'rgId', OLD.rgId,
@@ -953,6 +954,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
         'contentRefId', NEW.contentRefId,
+        'adminRefId', NEW.adminRefId,
         'title', NEW.title,
         'altTitle', NEW.altTitle,
         'episodeNumber', NEW.episodeNumber,
@@ -992,6 +994,7 @@ BEGIN
     SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'adminRefId', OLD.adminRefId,
         'title', OLD.title,
         'altTitle', OLD.altTitle,
         'episodeNumber', OLD.episodeNumber,
@@ -1007,6 +1010,7 @@ BEGIN
         SET newJsonData = GetContentDataJSON(JSON_OBJECT(
             'contentId', NEW.contentId,
             'contentRefId', NEW.contentRefId,
+            'adminRefId', NEW.adminRefId,
             'title', NEW.title,
             'altTitle', NEW.altTitle,
             'episodeNumber', NEW.episodeNumber,
@@ -1050,6 +1054,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'adminRefId', OLD.adminRefId,
         'seasonContentRefId', seasonContentRefId,
         'title', OLD.title,
         'altTitle', OLD.altTitle,
@@ -1119,6 +1124,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
         'contentRefId', NEW.contentRefId,
+        'adminRefId', NEW.adminRefId,
         'tmdbId', NEW.tmdbId,
         'title', NEW.title,
         'altTitle', NEW.altTitle,
@@ -1171,6 +1177,7 @@ BEGIN
     SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'adminRefId', OLD.adminRefId,
         'title', old_display_title,
         'altTitle', OLD.altTitle,
         'releaseDate', OLD.releaseDate,
@@ -1196,6 +1203,7 @@ BEGIN
         SET newJsonData = GetContentDataJSON(JSON_OBJECT(
             'contentId', NEW.contentId,
             'contentRefId', NEW.contentRefId,
+            'adminRefId', NEW.adminRefId,
             'title', new_display_title,
             'altTitle', NEW.altTitle,
             'releaseDate', NEW.releaseDate,
@@ -1242,6 +1250,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'adminRefId', OLD.adminRefId,
         'priceRefId', OLD.priceRefId,
         'tmdbId', OLD.tmdbId,
         'title', OLD.title,
@@ -1281,6 +1290,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', NEW.contentId,
         'contentRefId', NEW.contentRefId,
+        'adminRefId', NEW.adminRefId,
         'tmdbId', NEW.tmdbId,
         'title', NEW.title,
         'altTitle', NEW.altTitle,
@@ -1370,6 +1380,7 @@ BEGIN
     SET oldJsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'adminRefId', OLD.adminRefId,
         'title', old_display_title,
         'altReleaseDate', OLD.altReleaseDate,
         'seasonNumber', OLD.seasonNumber,
@@ -1397,6 +1408,7 @@ BEGIN
         SET newJsonData = GetContentDataJSON(JSON_OBJECT(
             'contentId', NEW.contentId, 
             'contentRefId', NEW.contentRefId, 
+            'adminRefId', NEW.adminRefId,
             'title', new_display_title,
             'altReleaseDate', NEW.altReleaseDate,
             'seasonNumber', NEW.seasonNumber,
@@ -1445,6 +1457,7 @@ BEGIN
     SET jsonData = GetContentDataJSON(JSON_OBJECT(
         'contentId', OLD.contentId,
         'contentRefId', OLD.contentRefId,
+        'adminRefId', OLD.adminRefId,
         'priceRefId', OLD.priceRefId,
         'tmdbId', OLD.tmdbId,
         'title', OLD.title,
