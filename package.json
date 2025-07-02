@@ -14,6 +14,7 @@
     "setup:master": "bun run src/commands/setup.js --direction master",
     "setup:local": "bun run src/commands/setup.js --direction local",
     "setupPost": "bun run src/commands/setupPost.js",
+    "setupPost:master": "bun run src/commands/setupPost.js --direction master",
     "clone": "bun run src/commands/clone.js",
     "cloneDiff": "bun run src/commands/cloneDiff.js",
     "test": "bun test"
