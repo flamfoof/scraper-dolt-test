@@ -378,7 +378,7 @@ CREATE UNIQUE INDEX MoviesDeeplinksRefSource_UK ON MoviesDeeplinks (contentRefId
 CREATE INDEX MoviesDeeplinksSource_IDX USING BTREE ON MoviesDeeplinks (sourceId, sourceType, region);
 
 CREATE INDEX SeriesDeeplinksContent_IDX USING BTREE ON SeriesDeeplinks (contentId);
-CREATE UNIQUE INDEX SeriesDeeplinksRefSource_UK ON SeriesDeeplinks (contentRefId, sourceId, originSource);
+CREATE UNIQUE INDEX SeriesDeeplinksRefSource_UK ON SeriesDeeplinks (contentRefId, sourceId, originSource, seasonNumber, episodeNumber);
 CREATE INDEX SeriesDeeplinksSource_IDX USING BTREE ON SeriesDeeplinks (sourceId, sourceType, region);
 
 
