@@ -313,11 +313,6 @@ CREATE OR REPLACE TABLE Users (
     PRIMARY KEY (id)
 );
 
--- Indexes for AuditLog table
-CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
-CREATE INDEX AuditLogUser_IDX USING BTREE ON AuditLog (username);
-CREATE INDEX AuditLogContext_IDX USING BTREE ON AuditLog (appContext);
-CREATE INDEX AuditLogcontentRefId_IDX USING BTREE ON AuditLog (contentRefId, tableName);
 
 -- Drop old Deeplinks table
 DROP TABLE IF EXISTS Deeplinks;
@@ -344,6 +339,12 @@ CREATE OR REPLACE TABLE Graveyard (
         sourceType
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Indexes for AuditLog table
+CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
+CREATE INDEX AuditLogUser_IDX USING BTREE ON AuditLog (username);
+CREATE INDEX AuditLogContext_IDX USING BTREE ON AuditLog (appContext);
+CREATE INDEX AuditLogcontentRefId_IDX USING BTREE ON AuditLog (contentRefId, tableName);
 
 -- Indexes for Graveyard table
 CREATE INDEX GraveyardType_IDX USING BTREE ON Graveyard (contentType, sourceType);
