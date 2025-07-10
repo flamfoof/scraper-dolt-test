@@ -340,6 +340,23 @@ CREATE OR REPLACE TABLE Graveyard (
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+CREATE OR REPLACE TABLE DebuggingStation (
+    id INT UNSIGNED AUTO_INCREMENT NOT NULL,
+    resource TEXT NOT NULL COMMENT 'Name of the function or procedure',
+    debugMessage TEXT NULL COMMENT 'Debugging information',
+    CONSTRAINT PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO DebuggingStation (id, resource, debugMessage) VALUES 
+(1, 'Resequencer', NULL),
+(2, 'InitializeAuditLog', NULL),
+(3, 'InitializeDeeplinks', NULL),
+(4, 'InitializePrices', NULL),
+(5, 'InitializeMovies', NULL),
+(6, 'InitializeSeries', NULL);
+
+
 -- Indexes for AuditLog table
 CREATE INDEX AuditLogEntity_IDX USING BTREE ON AuditLog (tableName);
 CREATE INDEX AuditLogUser_IDX USING BTREE ON AuditLog (username);
